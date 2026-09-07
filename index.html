@@ -1,0 +1,1457 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Controle de Vagas e Docas</title>
+<style>
+  :root{
+    --bg: #0a0f1a;
+    --panel: #101828;
+    --panel-line: #1e293f;
+    --livre: #12203a;
+    --livre-text: #5b7ba8;
+    --verde: #0e3d2a;
+    --verde-text: #3ddc97;
+    --verde-border: #1f7a52;
+    --laranja: #4a2a0d;
+    --laranja-text: #ffa94d;
+    --laranja-border: #b0621a;
+    --vermelho: #3d0f14;
+    --vermelho-text: #ff6b6b;
+    --vermelho-border: #a52834;
+    --text: #e7ecf5;
+    --text-dim: #7c8aa5;
+    --accent: #2f6fed;
+    --font: "Space Grotesk", "Inter", system-ui, -apple-system, sans-serif;
+    --mono: "IBM Plex Mono", "SF Mono", ui-monospace, monospace;
+  }
+  *{box-sizing:border-box;}
+  body{ margin:0; background: var(--bg); color: var(--text); font-family: var(--font); min-height:100vh; }
+  .app{ display:flex; flex-direction:column; min-height:100vh; }
+
+  .topbar{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:14px 22px; background: var(--panel); border-bottom:1px solid var(--panel-line);
+    flex-wrap:wrap; gap:12px;
+  }
+  .brand{ display:flex; align-items:baseline; gap:12px; }
+  .brand h1{ font-size:20px; margin:0; font-weight:700; letter-spacing:.2px; }
+  .brand .sub{ color:var(--text-dim); font-size:13px; }
+  .clock{ font-family:var(--mono); color:var(--text-dim); font-size:13px; }
+
+  .tabs{ display:flex; gap:6px; padding:0 22px; background:var(--panel); border-bottom:1px solid var(--panel-line); overflow-x:auto; }
+  .tab{
+    padding:10px 16px; cursor:pointer; color:var(--text-dim); font-size:14px;
+    border-bottom:2px solid transparent; user-select:none; font-weight:600; white-space:nowrap;
+  }
+  .tab.active{ color:var(--text); border-bottom-color: var(--accent); }
+
+  .stats{ display:flex; gap:0; padding:14px 22px; flex-wrap:wrap; }
+  .stat{ flex:1; min-width:110px; text-align:center; padding:10px 8px; border-right:1px solid var(--panel-line); }
+  .stat:last-child{ border-right:none; }
+  .stat .num{ font-size:26px; font-weight:700; font-family:var(--mono); }
+  .stat .lbl{ font-size:11px; color:var(--text-dim); margin-top:2px; }
+
+  main{ padding: 8px 22px 32px; flex:1; }
+  .section-title{ font-size:12px; letter-spacing:.5px; color:var(--text-dim); margin:22px 0 6px; font-weight:700; }
+  .section-title:first-child{ margin-top:4px; }
+
+  .grid{ display:grid; grid-template-columns: repeat(auto-fill, minmax(108px, 1fr)); gap:8px; margin-top:6px; }
+  .vaga{
+    background: var(--livre); border:1px solid var(--panel-line); border-radius:6px;
+    padding:10px 6px; text-align:center; cursor:pointer; transition: transform .08s ease; position:relative;
+  }
+  .vaga:active{ transform: scale(.96); }
+  .vaga .id{ font-size:11px; color:var(--text-dim); font-weight:600; }
+  .vaga .val{ font-family:var(--mono); font-size:16px; font-weight:700; margin-top:4px; color:var(--livre-text); letter-spacing:.3px; }
+  .vaga.livre .val{ font-size:12px; letter-spacing:1px; }
+  .vaga.ok{ background:var(--verde); border-color:var(--verde-border); }
+  .vaga.ok .val{ color:var(--verde-text); }
+  .vaga.aten{ background:var(--laranja); border-color:var(--laranja-border); }
+  .vaga.aten .val{ color:var(--laranja-text); }
+  .vaga.crit{ background:var(--vermelho); border-color:var(--vermelho-border); }
+  .vaga.crit .val{ color:var(--vermelho-text); }
+  .vaga .placa{ font-size:10px; color:var(--text-dim); margin-top:2px; font-family:var(--mono); }
+
+  .painel-mode .vaga{ cursor:default; }
+  .painel-mode .vaga .val{ font-size:20px; }
+  .painel-mode .vaga .id{ font-size:13px; }
+
+  .legend{ display:flex; gap:18px; margin-top:18px; flex-wrap:wrap; color:var(--text-dim); font-size:12px; }
+  .legend span{ display:inline-flex; align-items:center; gap:6px; }
+  .dot{ width:10px; height:10px; border-radius:3px; display:inline-block; }
+
+  .overlay{ position:fixed; inset:0; background:rgba(4,7,14,.72); display:none; align-items:center; justify-content:center; z-index:50; padding:16px; }
+  .overlay.show{ display:flex; }
+  .modal{ background: var(--panel); border:1px solid var(--panel-line); border-radius:10px; width:100%; max-width:380px; padding:22px; position:relative; }
+  .modal h2{ margin:0 0 4px; font-size:17px; }
+  .modal .vaga-tag{ color:var(--accent); font-family:var(--mono); font-size:13px; margin-bottom:16px; }
+  .field{ margin-bottom:14px; }
+  .field label{ display:block; font-size:12px; color:var(--text-dim); margin-bottom:5px; }
+  .field input{
+    width:100%; background:#0c1524; border:1px solid var(--panel-line); border-radius:6px;
+    padding:10px 11px; color:var(--text); font-family:var(--font); font-size:14px;
+  }
+  .field input:focus{ outline:none; border-color:var(--accent); }
+  .info-row{ display:flex; justify-content:space-between; font-size:13px; padding:6px 0; border-bottom:1px solid var(--panel-line); }
+  .info-row span:first-child{ color:var(--text-dim); }
+  .info-row.tempo .val-big{ font-family:var(--mono); font-size:22px; font-weight:700; }
+  .modal-actions{ display:flex; gap:10px; margin-top:18px; }
+  button{ font-family:var(--font); cursor:pointer; border:none; border-radius:6px; padding:11px 14px; font-size:14px; font-weight:600; }
+  .btn-primary{ background:var(--accent); color:#ffffff; flex:1; }
+  .btn-danger{ background:var(--vermelho-border); color:#fff; flex:1; }
+  .btn-ghost{ background:transparent; color:var(--text-dim); border:1px solid var(--panel-line); }
+  .close-x{ position:absolute; top:14px; right:16px; color:var(--text-dim); background:none; font-size:18px; padding:2px 6px; }
+
+  .settings-btn{ background:transparent; border:1px solid var(--panel-line); color:var(--text-dim); padding:8px 12px; font-size:13px; }
+  .settings-btn:hover{ color:var(--text); }
+
+  .stat-editable{ cursor:pointer; border-radius:6px; }
+  .stat-editable:hover{ background: rgba(255,255,255,.04); }
+  .stat-sub{ font-size:9px; color:var(--text-dim); margin-top:1px; }
+
+  .chip{ background:var(--bg); border:1px solid var(--panel-line); border-radius:20px; padding:6px 12px; font-size:12px; color:var(--text-dim); cursor:pointer; }
+  .chip.active{ border-color:var(--accent); color:var(--text); }
+  .field input:disabled{ opacity:.45; cursor:not-allowed; }
+  .aviso-usuario{ color:var(--text-dim); font-size:12px; margin:-6px 0 14px; line-height:1.4; }
+
+  .conta-row{ display:flex; justify-content:space-between; align-items:center; gap:10px; padding:7px 0; border-bottom:1px solid var(--panel-line); font-size:13px; }
+  .conta-row:last-child{ border-bottom:none; }
+  .conta-row button{ padding:5px 10px; font-size:11px; }
+  .link-sutil{ color:var(--accent); text-decoration:none; font-size:12px; }
+
+  .campo-senha{ position:relative; }
+  .campo-senha input{ padding-right:40px; }
+  .btn-olho{
+    position:absolute; right:4px; top:50%; transform:translateY(-50%);
+    background:transparent; border:none; padding:6px 8px; font-size:16px;
+    color:var(--text-dim); cursor:pointer; line-height:1;
+  }
+  .btn-olho:hover{ color:var(--text); }
+
+  .empty-note{ color:var(--text-dim); font-size:13px; margin-top:6px; }
+
+  /* RELATORIO */
+  .rel-toolbar{ display:flex; align-items:center; gap:14px; flex-wrap:wrap; margin-bottom:16px; }
+  .rel-toolbar input[type=date]{
+    background:#0c1524; border:1px solid var(--panel-line); border-radius:6px; color:var(--text);
+    padding:8px 10px; font-family:var(--font); font-size:14px;
+  }
+  .rel-toolbar label.chk{ display:flex; align-items:center; gap:7px; font-size:13px; color:var(--text-dim); cursor:pointer; }
+  table.rel{ width:100%; border-collapse:collapse; font-size:13px; }
+  table.rel th{ text-align:left; color:var(--text-dim); font-weight:600; font-size:11px; letter-spacing:.4px; padding:8px 10px; border-bottom:1px solid var(--panel-line); }
+  table.rel td{ padding:9px 10px; border-bottom:1px solid var(--panel-line); font-family:var(--mono); }
+  table.rel td.placa-col{ font-family:var(--font); font-weight:600; }
+  table.rel tr.ofensor td{ color:var(--vermelho-text); }
+  table.rel tr.ofensor{ background:rgba(165,40,52,.08); }
+  .rel-empty{ color:var(--text-dim); padding:20px 4px; font-size:14px; }
+
+  @media (max-width:520px){
+    .stat{ min-width: 30%; }
+    .grid{ grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); }
+    table.rel{ font-size:12px; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="topbar">
+    <div class="brand">
+      <h1 id="galpaoNome">Controle de Vagas</h1>
+      <span class="sub" id="dataHoje"></span>
+    </div>
+    <div style="display:flex; align-items:center; gap:12px;">
+      <span class="clock" id="relogio">--:--:--</span>
+      <span class="clock" id="sessaoLabel" style="display:none;"></span>
+      <button class="settings-btn" id="btnLogoutGeral" style="display:none;">Sair</button>
+      <button class="settings-btn" id="btnFullscreen">Tela cheia</button>
+      <button class="settings-btn" id="btnConfig">Ajustes</button>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <div class="tab active" data-tab="controle">Controle</div>
+    <div class="tab" data-tab="painel">Painel (TV)</div>
+    <div class="tab" data-tab="relatorio">Relatório do dia</div>
+  </div>
+
+  <div class="stats" id="statsBar">
+    <div class="stat stat-editable" id="stPendentesCard" title="Clique para atualizar">
+      <div class="num" id="stPendentes" style="color:var(--accent)">0</div>
+      <div class="lbl">Pendentes</div>
+      <div class="stat-sub" id="stPendentesData"></div>
+    </div>
+    <div class="stat"><div class="num" id="stLiberados" style="color:var(--verde-text)">0</div><div class="lbl">Liberados hoje</div></div>
+    <div class="stat"><div class="num" id="stTotal">0</div><div class="lbl">Total de posições</div></div>
+    <div class="stat"><div class="num" id="stLivres" style="color:var(--livre-text)">0</div><div class="lbl">Livres</div></div>
+    <div class="stat"><div class="num" id="stOcup" style="color:var(--verde-text)">0</div><div class="lbl">Ocupadas</div></div>
+    <div class="stat"><div class="num" id="stAten" style="color:var(--laranja-text)">0</div><div class="lbl">Atenção</div></div>
+    <div class="stat"><div class="num" id="stCrit" style="color:var(--vermelho-text)">0</div><div class="lbl">Acima do limite</div></div>
+  </div>
+
+  <main>
+    <div id="viewOperacao">
+      <div class="section-title">VAGAS</div>
+      <div class="grid" id="gridVagas"></div>
+
+      <div class="section-title">DOCAS</div>
+      <div class="grid" id="gridDocas"></div>
+
+      <div class="legend">
+        <span><span class="dot" style="background:var(--livre)"></span> Livre</span>
+        <span><span class="dot" style="background:var(--verde)"></span> Ocupada — dentro do tempo</span>
+        <span><span class="dot" style="background:var(--laranja)"></span> Ocupada — atenção</span>
+        <span><span class="dot" style="background:var(--vermelho)"></span> Ocupada — acima do limite</span>
+      </div>
+      <div class="empty-note" id="statusLinha"></div>
+    </div>
+
+    <div id="viewRelatorio" style="display:none;">
+      <div id="relBloqueado" style="max-width:340px; margin:60px auto 0; text-align:center;">
+        <h2 style="margin:0 0 8px; font-size:18px;">Relatório restrito</h2>
+        <p style="color:var(--text-dim); font-size:13px; margin:0 0 20px;">Faça login para ver o relatório do dia.</p>
+        <button class="btn-primary" id="btnAbrirLoginRelatorio">Entrar</button>
+      </div>
+
+      <div id="relConteudo" style="display:none;">
+        <div class="rel-toolbar">
+          <input type="date" id="relData">
+          <label class="chk"><input type="checkbox" id="relSoOfensores"> Mostrar só ofensores (acima do limite de TMC)</label>
+          <button class="btn-ghost" id="btnExportarCSV">Exportar CSV</button>
+          <button class="btn-ghost" id="btnExportarPDF">Exportar PDF</button>
+          <button class="btn-ghost" id="btnRelSair" style="margin-left:auto;">Sair</button>
+        </div>
+        <div id="relDatasChips" class="rel-toolbar" style="margin-bottom:6px;"></div>
+        <div id="relResumo" class="stats" style="padding:0 0 16px;"></div>
+        <div id="relGraficos" style="margin-bottom:20px;"></div>
+        <div id="relTabelaWrap"></div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<div class="overlay" id="overlayEntrada">
+  <div class="modal">
+    <button class="close-x" data-close="overlayEntrada">✕</button>
+    <h2>Dar entrada</h2>
+    <div class="vaga-tag" id="entradaVagaTag">Vaga 00</div>
+    <div class="field">
+      <label>Placa do veículo</label>
+      <input type="text" id="inputPlaca" placeholder="Ex: ABC1D23" autocomplete="off">
+    </div>
+    <div class="field">
+      <label>Motorista / transportadora (opcional)</label>
+      <input type="text" id="inputMotorista" placeholder="Opcional" autocomplete="off">
+    </div>
+    <div class="modal-actions">
+      <button class="btn-ghost" data-close="overlayEntrada">Cancelar</button>
+      <button class="btn-primary" id="btnConfirmarEntrada">Confirmar entrada</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="overlaySaida">
+  <div class="modal">
+    <button class="close-x" data-close="overlaySaida">✕</button>
+    <h2 id="saidaTitulo">Vaga ocupada</h2>
+    <div class="vaga-tag" id="saidaVagaTag">Vaga 00</div>
+
+    <div id="saidaVisualizacao">
+      <div class="info-row"><span>Placa</span><span id="saidaPlaca">—</span></div>
+      <div class="info-row"><span>Motorista</span><span id="saidaMotorista">—</span></div>
+      <div class="info-row"><span>Entrada</span><span id="saidaEntrada">—</span></div>
+      <div class="info-row tempo"><span>Tempo no local</span><span class="val-big" id="saidaTempo">00:00:00</span></div>
+      <div class="modal-actions">
+        <button class="btn-ghost" id="btnEditarOcupacao" style="width:100%;">Editar placa/motorista</button>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-ghost" data-close="overlaySaida">Fechar</button>
+        <button class="btn-danger" id="btnConfirmarSaida">Registrar saída</button>
+      </div>
+    </div>
+
+    <div id="saidaEdicao" style="display:none;">
+      <div class="field">
+        <label>Placa do veículo</label>
+        <input type="text" id="editPlaca" autocomplete="off">
+      </div>
+      <div class="field">
+        <label>Motorista / transportadora</label>
+        <input type="text" id="editMotorista" autocomplete="off">
+      </div>
+      <div class="modal-actions">
+        <button class="btn-ghost" id="btnCancelarEdicao">Cancelar</button>
+        <button class="btn-primary" id="btnSalvarEdicao">Salvar alteração</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="overlayConfirmSaida">
+  <div class="modal">
+    <button class="close-x" data-close="overlayConfirmSaida">✕</button>
+    <h2>Confirmar saída</h2>
+    <p style="font-size:14px; color:var(--text); line-height:1.5; margin:0 0 6px;">
+      Tem certeza que deseja registrar a saída do veículo <strong id="confirmPlaca">—</strong>,
+      ocupando a <strong id="confirmVagaTag">Vaga 00</strong>?
+    </p>
+    <p style="font-size:12px; color:var(--text-dim); margin:0 0 4px;">Essa ação libera a posição imediatamente.</p>
+    <div class="modal-actions">
+      <button class="btn-ghost" data-close="overlayConfirmSaida">Cancelar</button>
+      <button class="btn-danger" id="btnConfirmarSaidaDefinitivo">Sim, dar saída</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="overlayPendentes">
+  <div class="modal">
+    <button class="close-x" data-close="overlayPendentes">✕</button>
+    <h2>Veículos pendentes</h2>
+    <p style="font-size:12px; color:var(--text-dim); margin:0 0 14px; line-height:1.5;">
+      Informe quantos veículos estão previstos/pendentes para a expedição de hoje.
+      Digite esse número manualmente no início do turno — a partir daí, cada saída
+      registrada no painel abate 1 automaticamente, até chegar a zero.
+    </p>
+    <div class="field">
+      <label>Quantidade pendente</label>
+      <input type="number" id="inputPendentes" min="0">
+    </div>
+    <div class="modal-actions">
+      <button class="btn-ghost" data-close="overlayPendentes">Cancelar</button>
+      <button class="btn-primary" id="btnSalvarPendentes">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="overlayConflito">
+  <div class="modal">
+    <button class="close-x" data-close="overlayConflito">✕</button>
+    <h2>Essa posição já mudou</h2>
+    <p style="font-size:14px; line-height:1.5; margin:0 0 6px;" id="conflitoMsg">
+      Outro dispositivo alterou esta vaga/doca enquanto você preenchia os dados. A tela foi atualizada com a informação mais recente.
+    </p>
+    <div class="modal-actions">
+      <button class="btn-primary" data-close="overlayConflito" style="width:100%;">Entendi</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="overlayLogin">
+  <div class="modal">
+    <button class="close-x" data-close="overlayLogin">✕</button>
+    <h2>Login necessário</h2>
+    <p style="font-size:12px; color:var(--text-dim); margin:0 0 14px;" id="loginContexto">Informe usuário e senha para continuar.</p>
+    <div class="field">
+      <label>Usuário</label>
+      <input type="text" id="loginUser" autocomplete="off">
+    </div>
+    <div class="field">
+      <label>Senha</label>
+      <div class="campo-senha">
+        <input type="password" id="loginPass" autocomplete="off">
+        <button type="button" class="btn-olho" data-target="loginPass" aria-label="Mostrar senha">👁</button>
+      </div>
+    </div>
+    <div id="loginErro" style="color:var(--vermelho-text); font-size:12px; margin-bottom:10px; display:none;"></div>
+    <div class="modal-actions">
+      <button class="btn-ghost" data-close="overlayLogin">Cancelar</button>
+      <button class="btn-primary" id="btnLoginEntrar">Entrar</button>
+    </div>
+    <p style="text-align:center; margin:14px 0 0;">
+      <a href="#" id="linkAbrirCadastro" class="link-sutil">Não tem conta? Solicitar cadastro</a>
+    </p>
+  </div>
+</div>
+
+<div class="overlay" id="overlayCadastro">
+  <div class="modal">
+    <button class="close-x" data-close="overlayCadastro">✕</button>
+    <h2>Solicitar cadastro</h2>
+    <p style="font-size:12px; color:var(--text-dim); margin:0 0 14px; line-height:1.5;">Seu cadastro só passa a funcionar depois que o administrador master aprovar.</p>
+    <div class="field">
+      <label>Usuário desejado</label>
+      <input type="text" id="cadUsuario" autocomplete="off">
+    </div>
+    <div class="field">
+      <label>Senha desejada</label>
+      <div class="campo-senha">
+        <input type="password" id="cadSenha" autocomplete="off">
+        <button type="button" class="btn-olho" data-target="cadSenha" aria-label="Mostrar senha">👁</button>
+      </div>
+    </div>
+    <div class="field">
+      <label>Tipo de acesso solicitado</label>
+      <select id="cadPapel" style="width:100%; background:#0c1524; border:1px solid var(--panel-line); border-radius:6px; padding:10px 11px; color:var(--text); font-family:var(--font); font-size:14px;">
+        <option value="operador">Operador (uso comum)</option>
+        <option value="admin">Administrador</option>
+      </select>
+    </div>
+    <div id="cadErro" style="color:var(--vermelho-text); font-size:12px; margin-bottom:10px; display:none;"></div>
+    <div class="modal-actions">
+      <button class="btn-ghost" data-close="overlayCadastro">Cancelar</button>
+      <button class="btn-primary" id="btnEnviarCadastro">Enviar solicitação</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="overlayAviso">
+  <div class="modal">
+    <button class="close-x" data-close="overlayAviso">✕</button>
+    <h2 id="avisoTitulo">Aviso</h2>
+    <p id="avisoMsg" style="font-size:14px; line-height:1.5; margin:0 0 6px;"></p>
+    <div class="modal-actions">
+      <button class="btn-primary" data-close="overlayAviso" style="width:100%;">OK</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="overlayConfig">
+  <div class="modal">
+    <button class="close-x" data-close="overlayConfig">✕</button>
+    <h2>Ajustes do painel</h2>
+    <p class="aviso-usuario" id="ajustesAvisoUsuario" style="display:none;">Login como usuário comum: só é possível alterar o nome do galpão. Fale com um administrador para os demais ajustes.</p>
+    <div class="field">
+      <label>Nome do galpão / operação</label>
+      <input type="text" id="cfgNome" placeholder="Ex: Expedição SMG15">
+    </div>
+    <div class="field campo-admin">
+      <label>Quantidade de vagas</label>
+      <input type="number" id="cfgTotalVagas" min="0" max="200">
+    </div>
+    <div class="field campo-admin">
+      <label>Quantidade de docas</label>
+      <input type="number" id="cfgTotalDocas" min="0" max="100">
+    </div>
+    <div class="field campo-admin">
+      <label>Minutos até "atenção" (laranja) na grade ao vivo</label>
+      <input type="number" id="cfgWarn" min="1">
+    </div>
+    <div class="field campo-admin">
+      <label>Minutos até "acima do limite" (vermelho) na grade ao vivo</label>
+      <input type="number" id="cfgAlert" min="1">
+    </div>
+    <div class="field campo-admin">
+      <label>Limite de TMC para contar como ofensor no relatório (min)</label>
+      <input type="number" id="cfgLimiteTMC" min="1">
+    </div>
+    <div class="field campo-master">
+      <label>Usuário administrador master</label>
+      <input type="text" id="cfgMasterUser" placeholder="Ex: master">
+    </div>
+    <div class="field campo-master">
+      <label>Senha administrador master</label>
+      <div class="campo-senha">
+        <input type="password" id="cfgMasterPass" placeholder="Ex: master123">
+        <button type="button" class="btn-olho" data-target="cfgMasterPass" aria-label="Mostrar senha">👁</button>
+      </div>
+    </div>
+
+    <div id="secaoAprovacoes" style="display:none; margin:18px 0; border:1px solid var(--panel-line); border-radius:8px; padding:12px;">
+      <div class="section-title" style="margin:0 0 8px;">CADASTROS PENDENTES</div>
+      <div id="listaPendentes"></div>
+      <div class="section-title" style="margin:16px 0 8px;">CONTAS APROVADAS</div>
+      <div id="listaContas"></div>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn-ghost" data-close="overlayConfig">Cancelar</button>
+      <button class="btn-primary" id="btnSalvarConfig">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+// ======================================================================
+// CONFIGURAÇÃO DO SUPABASE — troque pelos dados do SEU projeto
+// (Painel do Supabase > Project Settings > Data API: "Project URL" e
+// "anon public" key). Veja as instruções enviadas junto com este arquivo
+// para o passo a passo completo de criação do projeto e da tabela.
+// ======================================================================
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+const SUPABASE_URL = "COLE_AQUI_A_URL_DO_PROJETO";
+const SUPABASE_ANON_KEY = "COLE_AQUI_A_CHAVE_ANON_PUBLIC";
+
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const TABELA = "painel_estado";
+const ID_LINHA = "estado";
+// ======================================================================
+
+const HISTORICO_MAX_DIAS = 15;
+
+let state = null;
+let currentTab = 'controle';
+let selected = null; // { group: 'vagas'|'docas', id }
+let saving = false;
+let sessao = null; // { role: 'admin' | 'usuario' }
+let loginDestino = null; // 'ajustes' | 'relatorio'
+
+function novaLista(qtd){
+  const arr = [];
+  for(let i=1;i<=qtd;i++){
+    arr.push({ id:i, status:'livre', placa:null, motorista:null, entryTs:null });
+  }
+  return arr;
+}
+
+function defaultState(){
+  return {
+    config: { nome:'Controle de Vagas', warnMin:20, alertMin:40, limiteTMC:30, totalVagas:24, totalDocas:8, pendentesQtd:0, pendentesData:null, masterUser:'master', masterPass:'master123' },
+    contas: [],
+    solicitacoes: [],
+    vagas: novaLista(24),
+    docas: novaLista(8),
+    historico: []
+  };
+}
+
+function dateKeyLocal(ts){
+  const d = new Date(ts);
+  const y = d.getFullYear();
+  const m = String(d.getMonth()+1).padStart(2,'0');
+  const day = String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${day}`;
+}
+
+function podarHistorico(){
+  const limite = Date.now() - HISTORICO_MAX_DIAS*24*60*60*1000;
+  state.historico = state.historico.filter(r => r.exitTs >= limite);
+  if(state.historico.length > 2000){
+    state.historico = state.historico.slice(state.historico.length-2000);
+  }
+}
+
+let ignorarProximaAtualizacao = false;
+
+function aplicarMigracoes(){
+  if(!state.docas) state.docas = novaLista(state.config.totalDocas || 8);
+  if(!state.historico) state.historico = [];
+  if(state.config.limiteTMC == null) state.config.limiteTMC = 30;
+  if(state.config.pendentesQtd == null) state.config.pendentesQtd = 0;
+  if(state.config.pendentesData === undefined) state.config.pendentesData = null;
+  if(!state.config.masterUser){
+    state.config.masterUser = state.config.adminUser || state.config.relUser || 'master';
+    state.config.masterPass = state.config.adminPass || state.config.relPass || 'master123';
+  }
+  if(!state.contas){
+    state.contas = [];
+    if(state.config.userUser){
+      state.contas.push({ id: 1, usuario: state.config.userUser, senha: state.config.userPass || '1234', papel: 'operador' });
+    }
+  }
+  if(!state.solicitacoes) state.solicitacoes = [];
+}
+
+async function loadState(){
+  try{
+    const { data, error } = await supabase.from(TABELA).select('dados').eq('id', ID_LINHA).maybeSingle();
+    if(error) throw error;
+    if(data && data.dados){
+      state = data.dados;
+      aplicarMigracoes();
+    } else {
+      state = defaultState();
+      await persist();
+    }
+  }catch(e){
+    console.error('Falha ao carregar do Supabase — confira a configuração no topo do arquivo.', e);
+    state = defaultState();
+  }
+}
+
+async function persist(){
+  try{
+    saving = true;
+    podarHistorico();
+    ignorarProximaAtualizacao = true;
+    const { error } = await supabase.from(TABELA).upsert({ id: ID_LINHA, dados: state });
+    if(error) throw error;
+  }catch(e){
+    console.error('Falha ao salvar no Supabase — confira a configuração no topo do arquivo.', e);
+  }finally{
+    saving = false;
+  }
+}
+
+// Sincronização em tempo real: qualquer dispositivo que alterar o estado
+// atualiza todos os outros quase instantaneamente, sem precisar de polling.
+function iniciarSincronizacaoTempoReal(){
+  supabase
+    .channel('painel-realtime')
+    .on('postgres_changes', { event: '*', schema: 'public', table: TABELA, filter: `id=eq.${ID_LINHA}` }, (payload)=>{
+      if(ignorarProximaAtualizacao){ ignorarProximaAtualizacao = false; return; }
+      if(payload.new && payload.new.dados){
+        state = payload.new.dados;
+        render();
+      }
+    })
+    .subscribe((status)=>{
+      if(status === 'CHANNEL_ERROR'){
+        console.error('Erro na sincronização em tempo real com o Supabase — confira se o Realtime está ativado na tabela.');
+      }
+    });
+}
+
+async function buscarEstadoRemoto(){
+  try{
+    const { data, error } = await supabase.from(TABELA).select('dados').eq('id', ID_LINHA).maybeSingle();
+    if(error) throw error;
+    if(data && data.dados) return data.dados;
+  }catch(e){ /* ignora erro transitório de leitura */ }
+  return null;
+}
+
+function fmtDuration(ms){
+  const totalSec = Math.max(0, Math.floor(ms/1000));
+  const h = Math.floor(totalSec/3600);
+  const m = Math.floor((totalSec%3600)/60);
+  const s = totalSec%60;
+  return [h,m,s].map(n=>String(n).padStart(2,'0')).join(':');
+}
+
+function statusClasse(item){
+  if(item.status === 'livre') return 'livre';
+  const elapsedMin = (Date.now() - item.entryTs)/60000;
+  if(elapsedMin >= state.config.alertMin) return 'crit';
+  if(elapsedMin >= state.config.warnMin) return 'aten';
+  return 'ok';
+}
+
+function buildGrid(gridEl, group){
+  const lista = state[group];
+  if(gridEl.childElementCount !== lista.length){
+    gridEl.innerHTML = '';
+    lista.forEach(item=>{
+      const el = document.createElement('div');
+      el.className = 'vaga';
+      el.dataset.id = item.id;
+      el.innerHTML = `<div class="id">${String(item.id).padStart(2,'0')}</div><div class="val"></div><div class="placa"></div>`;
+      el.addEventListener('click', ()=> onItemClick(group, item.id));
+      gridEl.appendChild(el);
+    });
+  }
+}
+
+function renderGrid(gridEl, group){
+  buildGrid(gridEl, group);
+  const lista = state[group];
+  let counts = { livres:0, ok:0, aten:0, crit:0 };
+  lista.forEach(item=>{
+    const el = gridEl.querySelector(`.vaga[data-id="${item.id}"]`);
+    if(!el) return;
+    const cls = statusClasse(item);
+    el.className = 'vaga ' + (cls==='livre' ? 'livre' : cls);
+    const valEl = el.querySelector('.val');
+    const placaEl = el.querySelector('.placa');
+    if(item.status==='livre'){
+      valEl.textContent = 'LIVRE';
+      placaEl.textContent = '';
+      counts.livres++;
+    } else {
+      valEl.textContent = fmtDuration(Date.now() - item.entryTs);
+      placaEl.textContent = item.placa || '';
+      counts[cls]++;
+    }
+  });
+  return counts;
+}
+
+function render(){
+  document.getElementById('galpaoNome').textContent = state.config.nome || 'Controle de Vagas';
+
+  const hojeChave = hojeLocalISO();
+  const liberadosHoje = state.historico.filter(r => r.dateKey === hojeChave).length;
+  document.getElementById('stPendentes').textContent = state.config.pendentesQtd;
+  document.getElementById('stLiberados').textContent = liberadosHoje;
+  const subEl = document.getElementById('stPendentesData');
+  if(state.config.pendentesData && state.config.pendentesData !== hojeChave){
+    const [ano,mes,dia] = state.config.pendentesData.split('-');
+    subEl.textContent = `desde ${dia}/${mes} — atualize`;
+  } else if(state.config.pendentesData === hojeChave){
+    subEl.textContent = 'atualizado hoje';
+  } else {
+    subEl.textContent = '';
+  }
+
+  if(currentTab === 'relatorio'){
+    document.getElementById('viewOperacao').style.display = 'none';
+    document.getElementById('viewRelatorio').style.display = '';
+    document.getElementById('statsBar').style.display = 'none';
+    if(sessao){
+      document.getElementById('relBloqueado').style.display = 'none';
+      document.getElementById('relConteudo').style.display = '';
+      renderRelatorio();
+    } else {
+      document.getElementById('relBloqueado').style.display = '';
+      document.getElementById('relConteudo').style.display = 'none';
+    }
+    return;
+  }
+  document.getElementById('viewOperacao').style.display = '';
+  document.getElementById('viewRelatorio').style.display = 'none';
+  document.getElementById('statsBar').style.display = '';
+
+  const cVagas = renderGrid(document.getElementById('gridVagas'), 'vagas');
+  const cDocas = renderGrid(document.getElementById('gridDocas'), 'docas');
+
+  const total = state.vagas.length + state.docas.length;
+  const livres = cVagas.livres + cDocas.livres;
+  const ok = cVagas.ok + cDocas.ok;
+  const aten = cVagas.aten + cDocas.aten;
+  const crit = cVagas.crit + cDocas.crit;
+
+  document.getElementById('stTotal').textContent = total;
+  document.getElementById('stLivres').textContent = livres;
+  document.getElementById('stOcup').textContent = ok+aten+crit;
+  document.getElementById('stAten').textContent = aten;
+  document.getElementById('stCrit').textContent = crit;
+}
+
+function onItemClick(group, id){
+  if(currentTab !== 'controle') return;
+  const item = state[group].find(v=>v.id===id);
+  selected = { group, id };
+  const rotulo = group === 'vagas' ? 'Vaga' : 'Doca';
+  if(item.status === 'livre'){
+    document.getElementById('entradaVagaTag').textContent = rotulo + ' ' + String(id).padStart(2,'0');
+    document.getElementById('inputPlaca').value = '';
+    document.getElementById('inputMotorista').value = '';
+    openOverlay('overlayEntrada');
+    setTimeout(()=>document.getElementById('inputPlaca').focus(), 50);
+  } else {
+    document.getElementById('saidaTitulo').textContent = rotulo + ' ocupada';
+    document.getElementById('saidaVagaTag').textContent = rotulo + ' ' + String(id).padStart(2,'0');
+    document.getElementById('saidaPlaca').textContent = item.placa || '—';
+    document.getElementById('saidaMotorista').textContent = item.motorista || '—';
+    document.getElementById('saidaEntrada').textContent = new Date(item.entryTs).toLocaleTimeString('pt-BR');
+    document.getElementById('saidaTempo').textContent = fmtDuration(Date.now()-item.entryTs);
+    document.getElementById('saidaVisualizacao').style.display = '';
+    document.getElementById('saidaEdicao').style.display = 'none';
+    openOverlay('overlaySaida');
+  }
+}
+
+function openOverlay(id){ document.getElementById(id).classList.add('show'); }
+function closeOverlay(id){ document.getElementById(id).classList.remove('show'); }
+
+document.querySelectorAll('.btn-olho').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    const input = document.getElementById(btn.dataset.target);
+    if(!input) return;
+    const mostrando = input.type === 'text';
+    input.type = mostrando ? 'password' : 'text';
+    btn.textContent = mostrando ? '👁' : '🙈';
+    btn.setAttribute('aria-label', mostrando ? 'Mostrar senha' : 'Ocultar senha');
+  });
+});
+
+document.querySelectorAll('[data-close]').forEach(btn=>{
+  btn.addEventListener('click', ()=> closeOverlay(btn.dataset.close));
+});
+
+document.getElementById('btnConfirmarEntrada').addEventListener('click', async ()=>{
+  const placa = document.getElementById('inputPlaca').value.trim().toUpperCase();
+  if(!placa){ document.getElementById('inputPlaca').focus(); return; }
+  const motorista = document.getElementById('inputMotorista').value.trim();
+
+  const remoto = await buscarEstadoRemoto();
+  if(remoto){
+    const itemRemoto = remoto[selected.group].find(v=>v.id===selected.id);
+    if(itemRemoto && itemRemoto.status !== 'livre'){
+      state = remoto;
+      closeOverlay('overlayEntrada');
+      document.getElementById('conflitoMsg').textContent =
+        'Essa posição já foi ocupada por outro dispositivo (placa ' + (itemRemoto.placa || 'não informada') + ') enquanto você preenchia os dados. A tela foi atualizada.';
+      openOverlay('overlayConflito');
+      render();
+      return;
+    }
+    state = remoto;
+  }
+
+  const item = state[selected.group].find(v=>v.id===selected.id);
+  item.status = 'ocupada';
+  item.placa = placa;
+  item.motorista = motorista || null;
+  item.entryTs = Date.now();
+  closeOverlay('overlayEntrada');
+  render();
+  await persist();
+});
+
+document.getElementById('btnConfirmarSaida').addEventListener('click', ()=>{
+  const item = state[selected.group].find(v=>v.id===selected.id);
+  const rotulo = selected.group === 'vagas' ? 'Vaga' : 'Doca';
+  document.getElementById('confirmPlaca').textContent = item.placa || 'sem placa informada';
+  document.getElementById('confirmVagaTag').textContent = rotulo + ' ' + String(item.id).padStart(2,'0');
+  closeOverlay('overlaySaida');
+  openOverlay('overlayConfirmSaida');
+});
+
+document.getElementById('btnConfirmarSaidaDefinitivo').addEventListener('click', async ()=>{
+  const itemAntesDoCheck = state[selected.group].find(v=>v.id===selected.id);
+  const entryTsEsperado = itemAntesDoCheck.entryTs;
+
+  const remoto = await buscarEstadoRemoto();
+  if(remoto){
+    const itemRemoto = remoto[selected.group].find(v=>v.id===selected.id);
+    if(!itemRemoto || itemRemoto.status !== 'ocupada' || itemRemoto.entryTs !== entryTsEsperado){
+      state = remoto;
+      closeOverlay('overlayConfirmSaida');
+      document.getElementById('conflitoMsg').textContent =
+        'Essa posição já foi alterada por outro dispositivo (saída já registrada ou novo veículo já entrou). A tela foi atualizada.';
+      openOverlay('overlayConflito');
+      render();
+      return;
+    }
+    state = remoto;
+  }
+
+  const item = state[selected.group].find(v=>v.id===selected.id);
+  const exitTs = Date.now();
+  const durMin = Math.round((exitTs - item.entryTs)/60000);
+  state.historico.push({
+    tipo: selected.group === 'vagas' ? 'VAGA' : 'DOCA',
+    numero: item.id,
+    placa: item.placa,
+    motorista: item.motorista,
+    entryTs: item.entryTs,
+    exitTs,
+    durMin,
+    dateKey: dateKeyLocal(exitTs)
+  });
+  // Cada saída registrada abate 1 do total de pendentes informado manualmente,
+  // até o mínimo de zero.
+  state.config.pendentesQtd = Math.max(0, (state.config.pendentesQtd || 0) - 1);
+  item.status = 'livre';
+  item.placa = null;
+  item.motorista = null;
+  item.entryTs = null;
+  closeOverlay('overlayConfirmSaida');
+  render();
+  await persist();
+});
+
+document.getElementById('btnEditarOcupacao').addEventListener('click', ()=>{
+  const item = state[selected.group].find(v=>v.id===selected.id);
+  document.getElementById('editPlaca').value = item.placa || '';
+  document.getElementById('editMotorista').value = item.motorista || '';
+  document.getElementById('saidaVisualizacao').style.display = 'none';
+  document.getElementById('saidaEdicao').style.display = '';
+});
+
+document.getElementById('btnCancelarEdicao').addEventListener('click', ()=>{
+  document.getElementById('saidaEdicao').style.display = 'none';
+  document.getElementById('saidaVisualizacao').style.display = '';
+});
+
+document.getElementById('btnSalvarEdicao').addEventListener('click', async ()=>{
+  const novaPlaca = document.getElementById('editPlaca').value.trim().toUpperCase();
+  const novoMotorista = document.getElementById('editMotorista').value.trim();
+  if(!novaPlaca){ document.getElementById('editPlaca').focus(); return; }
+
+  const itemAntesDoCheck = state[selected.group].find(v=>v.id===selected.id);
+  const entryTsEsperado = itemAntesDoCheck.entryTs;
+
+  const remoto = await buscarEstadoRemoto();
+  if(remoto){
+    const itemRemoto = remoto[selected.group].find(v=>v.id===selected.id);
+    if(!itemRemoto || itemRemoto.status !== 'ocupada' || itemRemoto.entryTs !== entryTsEsperado){
+      state = remoto;
+      closeOverlay('overlaySaida');
+      document.getElementById('conflitoMsg').textContent =
+        'Essa posição já foi alterada por outro dispositivo enquanto você editava. A tela foi atualizada.';
+      openOverlay('overlayConflito');
+      render();
+      return;
+    }
+    state = remoto;
+  }
+
+  const item = state[selected.group].find(v=>v.id===selected.id);
+  item.placa = novaPlaca;
+  item.motorista = novoMotorista || null;
+
+  document.getElementById('saidaPlaca').textContent = item.placa;
+  document.getElementById('saidaMotorista').textContent = item.motorista || '—';
+  document.getElementById('saidaEdicao').style.display = 'none';
+  document.getElementById('saidaVisualizacao').style.display = '';
+
+  render();
+  await persist();
+});
+
+document.getElementById('stPendentesCard').addEventListener('click', ()=>{
+  document.getElementById('inputPendentes').value = state.config.pendentesQtd;
+  openOverlay('overlayPendentes');
+  setTimeout(()=>document.getElementById('inputPendentes').focus(), 50);
+});
+
+document.getElementById('btnSalvarPendentes').addEventListener('click', async ()=>{
+  const val = Math.max(0, parseInt(document.getElementById('inputPendentes').value,10) || 0);
+  state.config.pendentesQtd = val;
+  state.config.pendentesData = hojeLocalISO();
+  closeOverlay('overlayPendentes');
+  render();
+  await persist();
+});
+
+function abrirAjustesModal(){
+  document.getElementById('cfgNome').value = state.config.nome;
+  document.getElementById('cfgTotalVagas').value = state.config.totalVagas;
+  document.getElementById('cfgTotalDocas').value = state.config.totalDocas;
+  document.getElementById('cfgWarn').value = state.config.warnMin;
+  document.getElementById('cfgAlert').value = state.config.alertMin;
+  document.getElementById('cfgLimiteTMC').value = state.config.limiteTMC;
+  document.getElementById('cfgMasterUser').value = state.config.masterUser;
+  document.getElementById('cfgMasterPass').value = state.config.masterPass;
+
+  const acessoTotal = temAcessoTotal();
+  const souMaster = !!(sessao && sessao.role === 'master');
+  document.querySelectorAll('#overlayConfig .campo-admin input').forEach(inp=>{
+    inp.disabled = !acessoTotal;
+  });
+  document.querySelectorAll('#overlayConfig .campo-master input').forEach(inp=>{
+    inp.disabled = !souMaster;
+  });
+  document.getElementById('ajustesAvisoUsuario').style.display = acessoTotal ? 'none' : '';
+  renderAprovacoes();
+
+  openOverlay('overlayConfig');
+}
+
+function temAcessoTotal(){
+  return !!(sessao && (sessao.role === 'admin' || sessao.role === 'master'));
+}
+
+function renderAprovacoes(){
+  const secao = document.getElementById('secaoAprovacoes');
+  if(!(sessao && sessao.role === 'master')){
+    secao.style.display = 'none';
+    return;
+  }
+  secao.style.display = '';
+
+  const pendentesEl = document.getElementById('listaPendentes');
+  const pendentes = state.solicitacoes.filter(s => s.status === 'pendente');
+  pendentesEl.innerHTML = pendentes.length === 0
+    ? '<div style="color:var(--text-dim); font-size:12px;">Nenhum cadastro pendente.</div>'
+    : pendentes.map(s => (
+        '<div class="conta-row"><span>' + s.usuario + ' — ' + (s.papel === 'admin' ? 'Administrador' : 'Operador') + '</span>' +
+        '<span><button class="btn-primary" data-aprovar="' + s.id + '">Aprovar</button> ' +
+        '<button class="btn-ghost" data-rejeitar="' + s.id + '">Rejeitar</button></span></div>'
+      )).join('');
+
+  pendentesEl.querySelectorAll('[data-aprovar]').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      const id = btn.dataset.aprovar;
+      const s = state.solicitacoes.find(x => String(x.id) === String(id));
+      if(!s) return;
+      state.contas.push({ id: Date.now(), usuario: s.usuario, senha: s.senha, papel: s.papel });
+      state.solicitacoes = state.solicitacoes.filter(x => String(x.id) !== String(id));
+      await persist();
+      renderAprovacoes();
+    });
+  });
+  pendentesEl.querySelectorAll('[data-rejeitar]').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      const id = btn.dataset.rejeitar;
+      const s = state.solicitacoes.find(x => String(x.id) === String(id));
+      if(s) s.status = 'rejeitado';
+      await persist();
+      renderAprovacoes();
+    });
+  });
+
+  const contasEl = document.getElementById('listaContas');
+  contasEl.innerHTML = state.contas.length === 0
+    ? '<div style="color:var(--text-dim); font-size:12px;">Nenhuma conta cadastrada ainda.</div>'
+    : state.contas.map(c => (
+        '<div class="conta-row"><span>' + c.usuario + ' — ' + (c.papel === 'admin' ? 'Administrador' : 'Operador') + '</span>' +
+        '<button class="btn-ghost" data-remover="' + c.id + '">Remover</button></div>'
+      )).join('');
+  contasEl.querySelectorAll('[data-remover]').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      const id = btn.dataset.remover;
+      state.contas = state.contas.filter(x => String(x.id) !== String(id));
+      await persist();
+      renderAprovacoes();
+    });
+  });
+}
+
+function mostrarAviso(titulo, msg){
+  document.getElementById('avisoTitulo').textContent = titulo;
+  document.getElementById('avisoMsg').textContent = msg;
+  openOverlay('overlayAviso');
+}
+
+document.getElementById('linkAbrirCadastro').addEventListener('click', (e)=>{
+  e.preventDefault();
+  closeOverlay('overlayLogin');
+  document.getElementById('cadUsuario').value = '';
+  document.getElementById('cadSenha').value = '';
+  document.getElementById('cadPapel').value = 'operador';
+  document.getElementById('cadErro').style.display = 'none';
+  openOverlay('overlayCadastro');
+});
+
+document.getElementById('btnEnviarCadastro').addEventListener('click', async ()=>{
+  const usuario = document.getElementById('cadUsuario').value.trim();
+  const senha = document.getElementById('cadSenha').value;
+  const papel = document.getElementById('cadPapel').value;
+  const erroEl = document.getElementById('cadErro');
+
+  if(!usuario || !senha){
+    erroEl.textContent = 'Preencha usuário e senha.';
+    erroEl.style.display = '';
+    return;
+  }
+
+  const remoto = await buscarEstadoRemoto();
+  if(remoto) state = remoto;
+
+  const usuarioExiste =
+    usuario === state.config.masterUser ||
+    state.contas.some(c => c.usuario === usuario) ||
+    state.solicitacoes.some(s => s.usuario === usuario && s.status !== 'rejeitado');
+
+  if(usuarioExiste){
+    erroEl.textContent = 'Esse usuário já existe ou já tem uma solicitação em andamento.';
+    erroEl.style.display = '';
+    return;
+  }
+
+  state.solicitacoes.push({ id: Date.now(), usuario, senha, papel, status: 'pendente', criadoEm: Date.now() });
+  await persist();
+
+  closeOverlay('overlayCadastro');
+  mostrarAviso('Cadastro enviado', 'Sua solicitação foi enviada. Você poderá entrar assim que um administrador master aprovar seu cadastro.');
+});
+
+document.getElementById('btnConfig').addEventListener('click', ()=>{
+  if(!sessao){ abrirLogin('ajustes'); return; }
+  abrirAjustesModal();
+});
+
+function ajustarLista(group, novoTotal){
+  const lista = state[group];
+  if(novoTotal > lista.length){
+    for(let i=lista.length+1;i<=novoTotal;i++){
+      lista.push({ id:i, status:'livre', placa:null, motorista:null, entryTs:null });
+    }
+  } else if(novoTotal < lista.length){
+    state[group] = lista.slice(0, novoTotal);
+  }
+}
+
+document.getElementById('btnSalvarConfig').addEventListener('click', async ()=>{
+  const nome = document.getElementById('cfgNome').value.trim() || 'Controle de Vagas';
+  state.config.nome = nome;
+
+  const acessoTotal = temAcessoTotal();
+  const souMaster = !!(sessao && sessao.role === 'master');
+
+  if(acessoTotal){
+    const novoTotalVagas = Math.max(0, Math.min(200, parseInt(document.getElementById('cfgTotalVagas').value,10) || 0));
+    const novoTotalDocas = Math.max(0, Math.min(100, parseInt(document.getElementById('cfgTotalDocas').value,10) || 0));
+    const warnMin = Math.max(1, parseInt(document.getElementById('cfgWarn').value,10) || state.config.warnMin);
+    const alertMin = Math.max(warnMin+1, parseInt(document.getElementById('cfgAlert').value,10) || state.config.alertMin);
+    const limiteTMC = Math.max(1, parseInt(document.getElementById('cfgLimiteTMC').value,10) || state.config.limiteTMC);
+
+    state.config.warnMin = warnMin;
+    state.config.alertMin = alertMin;
+    state.config.limiteTMC = limiteTMC;
+
+    if(novoTotalVagas !== state.vagas.length){
+      ajustarLista('vagas', novoTotalVagas);
+      state.config.totalVagas = novoTotalVagas;
+      document.getElementById('gridVagas').innerHTML = '';
+    }
+    if(novoTotalDocas !== state.docas.length){
+      ajustarLista('docas', novoTotalDocas);
+      state.config.totalDocas = novoTotalDocas;
+      document.getElementById('gridDocas').innerHTML = '';
+    }
+  }
+
+  if(souMaster){
+    state.config.masterUser = document.getElementById('cfgMasterUser').value.trim() || state.config.masterUser;
+    state.config.masterPass = document.getElementById('cfgMasterPass').value.trim() || state.config.masterPass;
+  }
+
+  closeOverlay('overlayConfig');
+  render();
+  await persist();
+});
+
+function atualizarLabelFullscreen(){
+  const btn = document.getElementById('btnFullscreen');
+  btn.textContent = document.fullscreenElement ? 'Sair da tela cheia' : 'Tela cheia';
+}
+
+document.getElementById('btnFullscreen').addEventListener('click', async ()=>{
+  try{
+    if(!document.fullscreenElement){
+      await document.documentElement.requestFullscreen();
+    } else {
+      await document.exitFullscreen();
+    }
+  }catch(e){
+    console.error('Não foi possível alternar tela cheia', e);
+  }
+});
+document.addEventListener('fullscreenchange', atualizarLabelFullscreen);
+
+document.querySelectorAll('.tab').forEach(tab=>{
+  tab.addEventListener('click', ()=>{
+    document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+    tab.classList.add('active');
+    currentTab = tab.dataset.tab;
+    document.querySelector('main').classList.toggle('painel-mode', currentTab==='painel');
+    render();
+  });
+});
+
+// ---- LOGIN GERAL (admin / usuário comum) ----
+function abrirLogin(destino){
+  loginDestino = destino;
+  document.getElementById('loginUser').value = '';
+  document.getElementById('loginPass').value = '';
+  document.getElementById('loginErro').style.display = 'none';
+  document.getElementById('loginContexto').textContent = destino === 'ajustes'
+    ? 'Informe seu usuário e senha para abrir os Ajustes.'
+    : 'Informe usuário e senha para ver o relatório do dia.';
+  openOverlay('overlayLogin');
+  setTimeout(()=>document.getElementById('loginUser').focus(), 50);
+}
+
+function autenticar(usuario, senha){
+  if(usuario === state.config.masterUser && senha === state.config.masterPass){
+    return { role: 'master' };
+  }
+  const conta = state.contas.find(c => c.usuario === usuario && c.senha === senha);
+  if(conta) return { role: conta.papel };
+
+  const pendente = state.solicitacoes.find(s => s.usuario === usuario && s.senha === senha);
+  if(pendente && pendente.status === 'pendente') return { erro: 'pendente' };
+  if(pendente && pendente.status === 'rejeitado') return { erro: 'rejeitado' };
+
+  return null;
+}
+
+async function tentarLoginGeral(){
+  const user = document.getElementById('loginUser').value.trim();
+  const pass = document.getElementById('loginPass').value;
+  const erroEl = document.getElementById('loginErro');
+
+  const remoto = await buscarEstadoRemoto();
+  if(remoto) state = remoto;
+
+  const resultado = autenticar(user, pass);
+
+  if(!resultado){
+    erroEl.textContent = 'Usuário ou senha incorretos.';
+    erroEl.style.display = '';
+    return;
+  }
+  if(resultado.erro === 'pendente'){
+    erroEl.textContent = 'Seu cadastro ainda está aguardando aprovação do administrador master.';
+    erroEl.style.display = '';
+    return;
+  }
+  if(resultado.erro === 'rejeitado'){
+    erroEl.textContent = 'Seu cadastro foi rejeitado. Fale com o administrador master.';
+    erroEl.style.display = '';
+    return;
+  }
+
+  sessao = { role: resultado.role, usuario: user };
+  closeOverlay('overlayLogin');
+  atualizarBadgeSessao();
+
+  if(loginDestino === 'ajustes') abrirAjustesModal();
+  else if(loginDestino === 'relatorio') render();
+}
+
+function atualizarBadgeSessao(){
+  const label = document.getElementById('sessaoLabel');
+  const btnSair = document.getElementById('btnLogoutGeral');
+  if(sessao){
+    label.style.display = '';
+    const nomes = { master: 'Master', admin: 'Administrador', operador: 'Operador' };
+    label.textContent = 'Logado: ' + (nomes[sessao.role] || sessao.role);
+    btnSair.style.display = '';
+  } else {
+    label.style.display = 'none';
+    btnSair.style.display = 'none';
+  }
+}
+
+document.getElementById('btnLoginEntrar').addEventListener('click', tentarLoginGeral);
+document.getElementById('loginPass').addEventListener('keydown', (e)=>{ if(e.key==='Enter') tentarLoginGeral(); });
+document.getElementById('loginUser').addEventListener('keydown', (e)=>{ if(e.key==='Enter') tentarLoginGeral(); });
+
+document.getElementById('btnLogoutGeral').addEventListener('click', ()=>{
+  sessao = null;
+  atualizarBadgeSessao();
+  render();
+});
+
+// ---- RELATORIO ----
+document.getElementById('relData').addEventListener('change', render);
+document.getElementById('relSoOfensores').addEventListener('change', render);
+
+document.getElementById('btnAbrirLoginRelatorio').addEventListener('click', ()=> abrirLogin('relatorio'));
+
+document.getElementById('btnRelSair').addEventListener('click', ()=>{
+  sessao = null;
+  atualizarBadgeSessao();
+  render();
+});
+
+function hojeLocalISO(){
+  const d = new Date();
+  return dateKeyLocal(d.getTime());
+}
+
+function obterRegistrosRelatorio(){
+  const inputData = document.getElementById('relData');
+  if(!inputData.value) inputData.value = hojeLocalISO();
+  const dataSel = inputData.value;
+  const soOfensores = document.getElementById('relSoOfensores').checked;
+  const limite = state.config.limiteTMC;
+
+  const todos = state.historico.filter(r => r.dateKey === dataSel).slice().sort((a,b) => b.durMin - a.durMin);
+  const registros = soOfensores ? todos.filter(r => r.durMin >= limite) : todos;
+
+  const qtd = todos.length;
+  const tmcMedio = qtd ? Math.round(todos.reduce((s,r)=>s+r.durMin,0)/qtd) : 0;
+  const ofensores = todos.filter(r => r.durMin >= limite).length;
+  const pctOfensores = qtd ? Math.round((ofensores/qtd)*100) : 0;
+
+  return { dataSel, soOfensores, limite, todos, registros, qtd, tmcMedio, ofensores, pctOfensores };
+}
+
+function renderChipsDatas(dataSelecionada){
+  const wrap = document.getElementById('relDatasChips');
+  const porData = {};
+  state.historico.forEach(r=>{ porData[r.dateKey] = (porData[r.dateKey]||0) + 1; });
+  const datas = Object.keys(porData).sort((a,b)=> b.localeCompare(a)).slice(0, HISTORICO_MAX_DIAS);
+  if(datas.length === 0){ wrap.innerHTML = ''; return; }
+  wrap.innerHTML = datas.map(d=>{
+    const [ano,mes,dia] = d.split('-');
+    const classe = d === dataSelecionada ? 'chip active' : 'chip';
+    return `<span class="${classe}" data-data="${d}">${dia}/${mes} · ${porData[d]}</span>`;
+  }).join('');
+  wrap.querySelectorAll('.chip').forEach(chip=>{
+    chip.addEventListener('click', ()=>{
+      document.getElementById('relData').value = chip.dataset.data;
+      render();
+    });
+  });
+}
+
+function gerarGraficosSVG(todos, limite){
+  if(todos.length === 0){
+    return '<div class="rel-empty">Sem dados suficientes para gerar gráficos nesta data.</div>';
+  }
+  const maxDur = Math.max(...todos.map(r=>r.durMin), limite, 1);
+  const largura = 460;
+  const alturaLinha = 22;
+  const alturaBarras = todos.length * alturaLinha + 16;
+
+  const barras = todos.map((r,i)=>{
+    const y = 8 + i*alturaLinha;
+    const w = Math.max(2, Math.round((r.durMin / maxDur) * (largura-120)));
+    const cor = r.durMin >= limite ? '#d6455a' : '#1fae6b';
+    const rotulo = r.placa || (r.tipo + ' ' + String(r.numero).padStart(2,'0'));
+    return '<text x="0" y="' + (y+11) + '" font-size="10" fill="#8592a6">' + rotulo + '</text>' +
+      '<rect x="92" y="' + y + '" width="' + w + '" height="14" rx="3" fill="' + cor + '"></rect>' +
+      '<text x="' + (92+w+6) + '" y="' + (y+11) + '" font-size="10" fill="#8592a6">' + r.durMin + 'min</text>';
+  }).join('');
+
+  const ofensores = todos.filter(r=>r.durMin>=limite).length;
+  const pct = todos.length ? Math.round((ofensores/todos.length)*100) : 0;
+  const raio = 40;
+  const circunf = Math.round(2*Math.PI*raio*100)/100;
+  const arcoOfensor = Math.round(circunf * (pct/100) * 100)/100;
+
+  const donut = '<svg viewBox="0 0 120 120" width="120" height="120">' +
+    '<circle cx="60" cy="60" r="' + raio + '" fill="none" stroke="#1fae6b" stroke-width="16"></circle>' +
+    '<circle cx="60" cy="60" r="' + raio + '" fill="none" stroke="#d6455a" stroke-width="16" ' +
+    'stroke-dasharray="' + arcoOfensor + ' ' + (circunf-arcoOfensor) + '" stroke-dashoffset="' + (circunf*0.25) + '" stroke-linecap="round"></circle>' +
+    '<text x="60" y="66" text-anchor="middle" font-size="20" font-weight="700" fill="currentColor">' + pct + '%</text>' +
+    '</svg>';
+
+  return '<div style="display:flex; gap:28px; flex-wrap:wrap; align-items:flex-start;">' +
+    '<div>' +
+      '<div class="section-title" style="margin-top:0;">TEMPO POR VEÍCULO (min)</div>' +
+      '<svg viewBox="0 0 ' + largura + ' ' + alturaBarras + '" width="100%" style="max-width:' + largura + 'px; height:auto;">' + barras + '</svg>' +
+    '</div>' +
+    '<div style="text-align:center;">' +
+      '<div class="section-title" style="margin-top:0;">% OFENSORES</div>' +
+      donut +
+      '<div style="font-size:11px; color:var(--text-dim); margin-top:6px;">' + ofensores + ' de ' + todos.length + ' veículos</div>' +
+    '</div>' +
+  '</div>';
+}
+
+function renderRelatorio(){
+  const { dataSel, soOfensores, limite, todos, registros, qtd, tmcMedio, ofensores, pctOfensores } = obterRegistrosRelatorio();
+
+  renderChipsDatas(dataSel);
+
+  const resumoEl = document.getElementById('relResumo');
+  resumoEl.innerHTML = `
+    <div class="stat"><div class="num">${qtd}</div><div class="lbl">Veículos no dia</div></div>
+    <div class="stat"><div class="num">${tmcMedio} min</div><div class="lbl">TMC médio do dia</div></div>
+    <div class="stat" style="color:var(--vermelho-text)"><div class="num" style="color:var(--vermelho-text)">${ofensores}</div><div class="lbl">Ofensores (≥ ${limite} min)</div></div>
+    <div class="stat" style="color:var(--vermelho-text)"><div class="num" style="color:var(--vermelho-text)">${pctOfensores}%</div><div class="lbl">% de veículos ofensores</div></div>
+  `;
+
+  document.getElementById('relGraficos').innerHTML = gerarGraficosSVG(todos, limite);
+
+  const wrap = document.getElementById('relTabelaWrap');
+  if(registros.length === 0){
+    wrap.innerHTML = `<div class="rel-empty">Nenhum registro ${soOfensores ? 'acima do limite ' : ''}para esta data.</div>`;
+    return;
+  }
+
+  const linhas = registros.map(r => {
+    const ofensor = r.durMin >= limite;
+    const entrada = new Date(r.entryTs).toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'});
+    const saida = new Date(r.exitTs).toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'});
+    return `<tr class="${ofensor ? 'ofensor' : ''}">
+      <td>${r.tipo} ${String(r.numero).padStart(2,'0')}</td>
+      <td class="placa-col">${r.placa || '—'}</td>
+      <td>${r.motorista || '—'}</td>
+      <td>${entrada}</td>
+      <td>${saida}</td>
+      <td>${r.durMin} min</td>
+    </tr>`;
+  }).join('');
+
+  wrap.innerHTML = `
+    <table class="rel">
+      <thead><tr>
+        <th>Posição</th><th>Placa</th><th>Motorista</th><th>Entrada</th><th>Saída</th><th>Tempo</th>
+      </tr></thead>
+      <tbody>${linhas}</tbody>
+    </table>
+  `;
+}
+
+function exportarCSV(){
+  const { registros, dataSel } = obterRegistrosRelatorio();
+  if(registros.length === 0){ alert('Não há registros para exportar nesta data/filtro.'); return; }
+
+  const linhas = [['Tipo','Numero','Placa','Motorista','Entrada','Saida','DuracaoMin'].join(';')];
+  registros.forEach(r=>{
+    linhas.push([
+      r.tipo,
+      r.numero,
+      r.placa || '',
+      r.motorista || '',
+      new Date(r.entryTs).toLocaleString('pt-BR'),
+      new Date(r.exitTs).toLocaleString('pt-BR'),
+      r.durMin
+    ].join(';'));
+  });
+  const csv = '\ufeff' + linhas.join('\r\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'relatorio-' + dataSel + '.csv';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function exportarPDF(){
+  const janela = window.open('', '_blank');
+  if(!janela){
+    alert('Não foi possível abrir a janela de impressão. Verifique se o navegador está bloqueando pop-ups para este site.');
+    return;
+  }
+
+  const { dataSel, registros, todos, qtd, tmcMedio, ofensores, pctOfensores, limite } = obterRegistrosRelatorio();
+  const graficos = gerarGraficosSVG(todos, limite);
+  const partes = dataSel.split('-');
+  const ano = partes[0], mes = partes[1], dia = partes[2];
+
+  const linhasTabela = registros.map(r=>{
+    const ofensor = r.durMin >= limite;
+    const estilo = ofensor ? 'color:#b91c2c; font-weight:600;' : '';
+    return '<tr style="' + estilo + '">' +
+      '<td>' + r.tipo + ' ' + String(r.numero).padStart(2,'0') + '</td>' +
+      '<td>' + (r.placa || '—') + '</td>' +
+      '<td>' + (r.motorista || '—') + '</td>' +
+      '<td>' + new Date(r.entryTs).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}) + '</td>' +
+      '<td>' + new Date(r.exitTs).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}) + '</td>' +
+      '<td>' + r.durMin + ' min</td>' +
+    '</tr>';
+  }).join('');
+
+  const html = '<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">' +
+    '<title>Relatório ' + dia + '/' + mes + '/' + ano + '</title>' +
+    '<style>' +
+    'body{ font-family: Arial, Helvetica, sans-serif; color:#1c2430; padding:28px; }' +
+    'h1{ font-size:20px; margin:0 0 2px; }' +
+    '.sub{ color:#6b7686; font-size:13px; margin:0 0 20px; }' +
+    '.resumo{ display:flex; gap:24px; margin-bottom:22px; flex-wrap:wrap; }' +
+    '.resumo div{ text-align:center; }' +
+    '.resumo .num{ font-size:22px; font-weight:700; }' +
+    '.resumo .lbl{ font-size:11px; color:#6b7686; }' +
+    'table{ width:100%; border-collapse:collapse; font-size:12px; margin-top:18px; }' +
+    'th,td{ text-align:left; padding:6px 8px; border-bottom:1px solid #dde3ec; }' +
+    'th{ color:#6b7686; font-size:10px; text-transform:uppercase; }' +
+    '@media print{ .no-print{ display:none; } }' +
+    '</style></head><body>' +
+    '<h1>Relatório de carregamento — ' + (state.config.nome || 'Painel de Vagas') + '</h1>' +
+    '<p class="sub">Data de referência: ' + dia + '/' + mes + '/' + ano + '</p>' +
+    '<div class="resumo">' +
+      '<div><div class="num">' + qtd + '</div><div class="lbl">Veículos no dia</div></div>' +
+      '<div><div class="num">' + tmcMedio + ' min</div><div class="lbl">TMC médio</div></div>' +
+      '<div><div class="num">' + ofensores + '</div><div class="lbl">Ofensores (≥ ' + limite + ' min)</div></div>' +
+      '<div><div class="num">' + pctOfensores + '%</div><div class="lbl">% ofensores</div></div>' +
+    '</div>' +
+    '<div>' + graficos + '</div>' +
+    '<table><thead><tr><th>Posição</th><th>Placa</th><th>Motorista</th><th>Entrada</th><th>Saída</th><th>Tempo</th></tr></thead>' +
+    '<tbody>' + linhasTabela + '</tbody></table>' +
+    '<p class="no-print" style="margin-top:24px; font-size:12px; color:#6b7686;">Use "Salvar como PDF" na janela de impressão do navegador.</p>' +
+    '</body></html>';
+
+  janela.document.open();
+  janela.document.write(html);
+  janela.document.close();
+  janela.onload = function(){ janela.focus(); janela.print(); };
+  setTimeout(function(){ try{ janela.focus(); janela.print(); }catch(e){} }, 400);
+}
+
+document.getElementById('btnExportarCSV').addEventListener('click', exportarCSV);
+document.getElementById('btnExportarPDF').addEventListener('click', exportarPDF);
+
+function tickClock(){
+  const now = new Date();
+  document.getElementById('relogio').textContent = now.toLocaleTimeString('pt-BR');
+  document.getElementById('dataHoje').textContent = now.toLocaleDateString('pt-BR', { weekday:'short', day:'2-digit', month:'2-digit', year:'numeric' });
+}
+
+(async function init(){
+  document.getElementById('statusLinha').textContent = 'Carregando...';
+  await loadState();
+  render();
+  tickClock();
+  iniciarSincronizacaoTempoReal();
+  document.getElementById('statusLinha').textContent = 'Toque em uma vaga/doca livre para dar entrada, ou em uma ocupada para registrar a saída. Os dados são compartilhados, em tempo real, entre todos os dispositivos que acessarem este link.';
+
+  setInterval(tickClock, 1000);
+  setInterval(()=>{ if(currentTab !== 'relatorio') render(); }, 1000);
+})();
+</script>
+</body>
+</html>
