@@ -47,6 +47,12 @@
   }
   .tab.active{ color:var(--text); border-bottom-color: var(--accent); }
 
+  .horarios-bar{ display:flex; gap:16px; padding:12px 22px 0; flex-wrap:wrap; }
+  .horario-bloco{ background:var(--panel); border:1px solid var(--panel-line); border-radius:8px; padding:8px 14px; }
+  .horario-titulo{ font-size:10px; color:var(--text-dim); letter-spacing:.4px; text-transform:uppercase; margin-bottom:4px; }
+  .horario-valores{ display:flex; gap:16px; font-family:var(--mono); font-size:13px; color:var(--text-dim); }
+  .horario-valores strong{ color:var(--text); font-weight:700; }
+
   .stats{ display:flex; gap:0; padding:14px 22px; flex-wrap:wrap; }
   .stat{ flex:1; min-width:110px; text-align:center; padding:10px 8px; border-right:1px solid var(--panel-line); }
   .stat:last-child{ border-right:none; }
@@ -175,6 +181,23 @@
     <div class="tab active" data-tab="controle">Controle</div>
     <div class="tab" data-tab="painel">Painel (TV)</div>
     <div class="tab" data-tab="relatorio">Relatório do dia</div>
+  </div>
+
+  <div class="horarios-bar" id="horariosBar">
+    <div class="horario-bloco">
+      <div class="horario-titulo">Horário previsto</div>
+      <div class="horario-valores">
+        <span>Início: <strong id="hPrevInicio">--:--</strong></span>
+        <span>Fim: <strong id="hPrevFim">--:--</strong></span>
+      </div>
+    </div>
+    <div class="horario-bloco">
+      <div class="horario-titulo">Horário real</div>
+      <div class="horario-valores">
+        <span>Início: <strong id="hRealInicio">--:--</strong></span>
+        <span>Fim: <strong id="hRealFim">--:--</strong></span>
+      </div>
+    </div>
   </div>
 
   <div class="stats" id="statsBar">
@@ -434,6 +457,14 @@
       <input type="number" id="cfgAlert" min="1">
     </div>
     <div class="field campo-admin">
+      <label>Horário previsto de início</label>
+      <input type="time" id="cfgPrevistoInicio">
+    </div>
+    <div class="field campo-admin">
+      <label>Horário previsto de fim</label>
+      <input type="time" id="cfgPrevistoFim">
+    </div>
+    <div class="field campo-admin">
       <label>Limite de TMC para contar como ofensor no relatório (min)</label>
       <input type="number" id="cfgLimiteTMC" min="1">
     </div>
@@ -519,7 +550,7 @@ function novaLista(qtd){
 
 function defaultState(){
   return {
-    config: { nome:'Controle de Vagas', warnMin:20, alertMin:40, limiteTMC:30, totalVagas:24, totalDocas:8, pendentesQtd:0, pendentesData:null, masterUser:'master', masterPass:'master123' },
+    config: { nome:'Controle de Vagas', warnMin:20, alertMin:40, limiteTMC:30, totalVagas:24, totalDocas:8, pendentesQtd:0, pendentesData:null, masterUser:'master', masterPass:'master123', previstoInicio:null, previstoFim:null },
     contas: [],
     solicitacoes: [],
     vagas: novaLista(24),
@@ -535,6 +566,44 @@ function dateKeyLocal(ts){
   const m = String(d.getMonth()+1).padStart(2,'0');
   const day = String(d.getDate()).padStart(2,'0');
   return `${y}-${m}-${day}`;
+}
+
+function fmtHora(ts){
+  return ts ? new Date(ts).toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'}) : '--:--';
+}
+
+// Horário real = primeira entrada e última saída do dia, olhando tanto quem
+// já saiu (histórico) quanto quem ainda está ocupando uma vaga/doca agora.
+function calcularHorarioRealDoDia(){
+  const hoje = dateKeyLocal(Date.now());
+  let entradas = [];
+  let saidas = [];
+
+  ['vagas','docas'].forEach(g=>{
+    (state[g] || []).forEach(item=>{
+      if(item.status === 'ocupada' && item.entryTs && dateKeyLocal(item.entryTs) === hoje){
+        entradas.push(item.entryTs);
+      }
+    });
+  });
+
+  (state.historico || []).forEach(r=>{
+    if(dateKeyLocal(r.entryTs) === hoje) entradas.push(r.entryTs);
+    if(r.dateKey === hoje) saidas.push(r.exitTs);
+  });
+
+  return {
+    inicio: entradas.length ? Math.min(...entradas) : null,
+    fim: saidas.length ? Math.max(...saidas) : null
+  };
+}
+
+function atualizarHorarios(){
+  document.getElementById('hPrevInicio').textContent = state.config.previstoInicio || '--:--';
+  document.getElementById('hPrevFim').textContent = state.config.previstoFim || '--:--';
+  const real = calcularHorarioRealDoDia();
+  document.getElementById('hRealInicio').textContent = fmtHora(real.inicio);
+  document.getElementById('hRealFim').textContent = fmtHora(real.fim);
 }
 
 function podarHistorico(){
@@ -565,6 +634,8 @@ function aplicarMigracoes(){
   }
   if(!state.solicitacoes) state.solicitacoes = [];
   if(!state.agenda) state.agenda = { vagas:{}, docas:{} };
+  if(state.config.previstoInicio === undefined) state.config.previstoInicio = null;
+  if(state.config.previstoFim === undefined) state.config.previstoFim = null;
 }
 
 async function loadState(){
@@ -707,6 +778,7 @@ function render(){
     document.getElementById('viewOperacao').style.display = 'none';
     document.getElementById('viewRelatorio').style.display = '';
     document.getElementById('statsBar').style.display = 'none';
+    document.getElementById('horariosBar').style.display = 'none';
     if(sessao){
       document.getElementById('relBloqueado').style.display = 'none';
       document.getElementById('relConteudo').style.display = '';
@@ -720,6 +792,8 @@ function render(){
   document.getElementById('viewOperacao').style.display = '';
   document.getElementById('viewRelatorio').style.display = 'none';
   document.getElementById('statsBar').style.display = '';
+  document.getElementById('horariosBar').style.display = '';
+  atualizarHorarios();
 
   const cVagas = renderGrid(document.getElementById('gridVagas'), 'vagas');
   const cDocas = renderGrid(document.getElementById('gridDocas'), 'docas');
@@ -942,6 +1016,8 @@ function abrirAjustesModal(){
   document.getElementById('cfgTotalDocas').value = state.config.totalDocas;
   document.getElementById('cfgWarn').value = state.config.warnMin;
   document.getElementById('cfgAlert').value = state.config.alertMin;
+  document.getElementById('cfgPrevistoInicio').value = state.config.previstoInicio || '';
+  document.getElementById('cfgPrevistoFim').value = state.config.previstoFim || '';
   document.getElementById('cfgLimiteTMC').value = state.config.limiteTMC;
   document.getElementById('cfgMasterUser').value = state.config.masterUser;
   document.getElementById('cfgMasterPass').value = state.config.masterPass;
@@ -1314,10 +1390,14 @@ document.getElementById('btnSalvarConfig').addEventListener('click', async ()=>{
     const warnMin = Math.max(1, parseInt(document.getElementById('cfgWarn').value,10) || state.config.warnMin);
     const alertMin = Math.max(warnMin+1, parseInt(document.getElementById('cfgAlert').value,10) || state.config.alertMin);
     const limiteTMC = Math.max(1, parseInt(document.getElementById('cfgLimiteTMC').value,10) || state.config.limiteTMC);
+    const previstoInicio = document.getElementById('cfgPrevistoInicio').value || null;
+    const previstoFim = document.getElementById('cfgPrevistoFim').value || null;
 
     state.config.warnMin = warnMin;
     state.config.alertMin = alertMin;
     state.config.limiteTMC = limiteTMC;
+    state.config.previstoInicio = previstoInicio;
+    state.config.previstoFim = previstoFim;
 
     if(novoTotalVagas !== state.vagas.length){
       ajustarLista('vagas', novoTotalVagas);
