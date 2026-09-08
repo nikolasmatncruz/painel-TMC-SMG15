@@ -6,11 +6,11 @@
 <title>Controle de Vagas e Docas</title>
 <style>
   :root{
-    --bg: #0a0f1a;
-    --panel: #101828;
-    --panel-line: #1e293f;
-    --livre: #12203a;
-    --livre-text: #5b7ba8;
+    --bg: #0d1140;
+    --panel: #141a52;
+    --panel-line: #272d68;
+    --livre: #1a2160;
+    --livre-text: #9aa3e0;
     --verde: #0e3d2a;
     --verde-text: #3ddc97;
     --verde-border: #1f7a52;
@@ -20,9 +20,9 @@
     --vermelho: #3d0f14;
     --vermelho-text: #ff6b6b;
     --vermelho-border: #a52834;
-    --text: #e7ecf5;
-    --text-dim: #7c8aa5;
-    --accent: #2f6fed;
+    --text: #f5f6ff;
+    --text-dim: #a7ade0;
+    --accent: #ffe600;
     --font: "Space Grotesk", "Inter", system-ui, -apple-system, sans-serif;
     --mono: "IBM Plex Mono", "SF Mono", ui-monospace, monospace;
   }
@@ -73,6 +73,7 @@
   .vaga.crit{ background:var(--vermelho); border-color:var(--vermelho-border); }
   .vaga.crit .val{ color:var(--vermelho-text); }
   .vaga .placa{ font-size:10px; color:var(--text-dim); margin-top:2px; font-family:var(--mono); }
+  .vaga .agenda{ font-size:9px; color:var(--accent); margin-top:2px; line-height:1.2; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 
   .painel-mode .vaga{ cursor:default; }
   .painel-mode .vaga .val{ font-size:20px; }
@@ -99,7 +100,7 @@
   .info-row.tempo .val-big{ font-family:var(--mono); font-size:22px; font-weight:700; }
   .modal-actions{ display:flex; gap:10px; margin-top:18px; }
   button{ font-family:var(--font); cursor:pointer; border:none; border-radius:6px; padding:11px 14px; font-size:14px; font-weight:600; }
-  .btn-primary{ background:var(--accent); color:#ffffff; flex:1; }
+  .btn-primary{ background:var(--accent); color:#141a52; flex:1; }
   .btn-danger{ background:var(--vermelho-border); color:#fff; flex:1; }
   .btn-ghost{ background:transparent; color:var(--text-dim); border:1px solid var(--panel-line); }
   .close-x{ position:absolute; top:14px; right:16px; color:var(--text-dim); background:none; font-size:18px; padding:2px 6px; }
@@ -236,6 +237,7 @@
     <button class="close-x" data-close="overlayEntrada">✕</button>
     <h2>Dar entrada</h2>
     <div class="vaga-tag" id="entradaVagaTag">Vaga 00</div>
+    <p id="entradaAgendaHint" style="font-size:11px; color:var(--text-dim); margin:-8px 0 14px; line-height:1.4; display:none;"></p>
     <div class="field">
       <label>Placa do veículo</label>
       <input type="text" id="inputPlaca" placeholder="Ex: ABC1D23" autocomplete="off">
@@ -511,7 +513,8 @@ function defaultState(){
     solicitacoes: [],
     vagas: novaLista(24),
     docas: novaLista(8),
-    historico: []
+    historico: [],
+    agenda: { vagas:{}, docas:{} }
   };
 }
 
@@ -550,6 +553,7 @@ function aplicarMigracoes(){
     }
   }
   if(!state.solicitacoes) state.solicitacoes = [];
+  if(!state.agenda) state.agenda = { vagas:{}, docas:{} };
 }
 
 async function loadState(){
@@ -635,7 +639,7 @@ function buildGrid(gridEl, group){
       const el = document.createElement('div');
       el.className = 'vaga';
       el.dataset.id = item.id;
-      el.innerHTML = `<div class="id">${String(item.id).padStart(2,'0')}</div><div class="val"></div><div class="placa"></div>`;
+      el.innerHTML = `<div class="id">${String(item.id).padStart(2,'0')}</div><div class="val"></div><div class="placa"></div><div class="agenda"></div>`;
       el.addEventListener('click', ()=> onItemClick(group, item.id));
       gridEl.appendChild(el);
     });
@@ -653,13 +657,18 @@ function renderGrid(gridEl, group){
     el.className = 'vaga ' + (cls==='livre' ? 'livre' : cls);
     const valEl = el.querySelector('.val');
     const placaEl = el.querySelector('.placa');
+    const agendaEl = el.querySelector('.agenda');
     if(item.status==='livre'){
       valEl.textContent = 'LIVRE';
       placaEl.textContent = '';
+      const previstos = (state.agenda && state.agenda[group] && state.agenda[group][item.id]) || [];
+      const nomes = [...new Set(previstos.map(p=>p.transportadora).filter(Boolean))];
+      agendaEl.textContent = nomes.length ? nomes.join(', ') : '';
       counts.livres++;
     } else {
       valEl.textContent = fmtDuration(Date.now() - item.entryTs);
       placaEl.textContent = item.placa || '';
+      agendaEl.textContent = '';
       counts[cls]++;
     }
   });
@@ -725,7 +734,17 @@ function onItemClick(group, id){
   if(item.status === 'livre'){
     document.getElementById('entradaVagaTag').textContent = rotulo + ' ' + String(id).padStart(2,'0');
     document.getElementById('inputPlaca').value = '';
-    document.getElementById('inputMotorista').value = '';
+    const previstos = (state.agenda && state.agenda[group] && state.agenda[group][id]) || [];
+    const hintEl = document.getElementById('entradaAgendaHint');
+    if(previstos.length){
+      document.getElementById('inputMotorista').value = previstos[0].transportadora || '';
+      hintEl.textContent = 'Previsto hoje: ' + previstos.map(p => `${p.onda} — ${p.rota}${p.transportadora ? ' ('+p.transportadora+')' : ''}`).join(' · ');
+      hintEl.style.display = '';
+    } else {
+      document.getElementById('inputMotorista').value = '';
+      hintEl.textContent = '';
+      hintEl.style.display = 'none';
+    }
     openOverlay('overlayEntrada');
     setTimeout(()=>document.getElementById('inputPlaca').focus(), 50);
   } else {
@@ -1055,6 +1074,61 @@ function ajustarLista(group, novoTotal){
   }
 }
 
+// Lê os blocos de "onda" (Rota | Transp. | Vaga | espaçador, repetidos lado a
+// lado). Um bloco é considerado válido quando sua coluna de "vaga" tem pelo
+// menos um valor numérico — assim que um bloco não tem número nenhum ali,
+// para de ler (evita misturar com outra tabela da planilha, tipo escala de
+// conferentes). Para cada linha válida, guarda rota/transportadora na agenda
+// daquele número de vaga, e registra o maior número de vaga encontrado
+// (usado como quantidade total de vagas físicas do dia).
+function lerBlocosDeOnda(linhas){
+  const larguraMax = linhas.reduce((max,l)=> Math.max(max, l ? l.length : 0), 0);
+  let totalRotas = 0;
+  let blocosValidos = 0;
+  let maxVaga = 0;
+  const agenda = {};
+  let k = 0;
+  while(true){
+    const rotaCol = k*4;
+    const transpCol = k*4 + 1;
+    const vagaCol = k*4 + 2;
+    if(rotaCol >= larguraMax) break;
+
+    const temNumeroNaVaga = linhas.some(l => l && typeof l[vagaCol] === 'number');
+    if(!temNumeroNaVaga) break;
+
+    let rotuloOnda = `Onda ${k+1}`;
+    for(let r=0; r<Math.min(3, linhas.length); r++){
+      const v = linhas[r] && linhas[r][rotaCol];
+      if(v && String(v).toUpperCase().includes('ONDA')){ rotuloOnda = String(v).trim(); break; }
+    }
+
+    linhas.forEach(l=>{
+      if(!l) return;
+      const rotaVal = l[rotaCol];
+      const vagaVal = l[vagaCol];
+      if(rotaVal === undefined || rotaVal === null || rotaVal === '') return;
+      const textoRota = String(rotaVal).trim().toUpperCase();
+      if(textoRota === 'ROTA' || textoRota.includes('ONDA')) return;
+      if(typeof vagaVal !== 'number') return;
+
+      totalRotas++;
+      const vagaId = String(Math.round(vagaVal));
+      maxVaga = Math.max(maxVaga, Math.round(vagaVal));
+      if(!agenda[vagaId]) agenda[vagaId] = [];
+      agenda[vagaId].push({
+        onda: rotuloOnda,
+        rota: String(rotaVal).trim(),
+        transportadora: l[transpCol] ? String(l[transpCol]).trim() : ''
+      });
+    });
+
+    blocosValidos++;
+    k++;
+  }
+  return { blocosValidos, totalRotas, maxVaga, agenda };
+}
+
 document.getElementById('inputPlanilha').addEventListener('change', async (e)=>{
   const file = e.target.files[0];
   if(!file) return;
@@ -1065,19 +1139,28 @@ document.getElementById('inputPlanilha').addEventListener('change', async (e)=>{
     const primeiraAba = wb.SheetNames[0];
     const linhas = XLSX.utils.sheet_to_json(wb.Sheets[primeiraAba], { header: 1 });
 
-    let novaVagas = null, novaDocas = null, novoPendentes = null;
+    // Formato simples "rótulo | valor" (Vagas / Docas / Pendentes)
+    let vagasSimples = null, docasSimples = null, pendentesSimples = null;
     linhas.forEach(linha=>{
       if(!linha || linha.length < 2) return;
       const chave = String(linha[0] || '').trim().toLowerCase();
       const valor = parseInt(linha[1], 10);
       if(isNaN(valor)) return;
-      if(chave.includes('vaga')) novaVagas = valor;
-      else if(chave.includes('doca')) novaDocas = valor;
-      else if(chave.includes('pendente')) novoPendentes = valor;
+      if(chave.includes('vaga')) vagasSimples = valor;
+      else if(chave.includes('doca')) docasSimples = valor;
+      else if(chave.includes('pendente')) pendentesSimples = valor;
     });
 
+    // Formato de "ondas" (Rota | Transp. | Vaga), como na planilha de expedição —
+    // agora também guarda a agenda (rota/transportadora prevista) por vaga.
+    const { blocosValidos, totalRotas, maxVaga, agenda } = lerBlocosDeOnda(linhas);
+
+    const novaVagas = blocosValidos > 0 ? maxVaga : vagasSimples;
+    const novaDocas = docasSimples;
+    const novoPendentes = pendentesSimples;
+
     if(novaVagas === null && novaDocas === null && novoPendentes === null){
-      mostrarAviso('Planilha não reconhecida', 'Não encontrei linhas com "Vagas", "Docas" ou "Pendentes" na primeira coluna. Confira o formato do arquivo.');
+      mostrarAviso('Planilha não reconhecida', 'Não encontrei blocos de onda (Rota/Transp./Vaga) nem linhas com "Vagas", "Docas" ou "Pendentes". Confira o formato do arquivo.');
       e.target.value = '';
       return;
     }
@@ -1100,11 +1183,19 @@ document.getElementById('inputPlanilha').addEventListener('change', async (e)=>{
       state.config.pendentesQtd = Math.max(0, novoPendentes);
       state.config.pendentesData = hojeLocalISO();
     }
+    if(blocosValidos > 0){
+      if(!state.agenda) state.agenda = { vagas:{}, docas:{} };
+      state.agenda.vagas = agenda;
+    }
 
     render();
     await persist();
     e.target.value = '';
-    mostrarAviso('Planilha importada', 'Quantidades atualizadas com sucesso a partir da planilha.');
+
+    const detalheOndas = blocosValidos > 0
+      ? ` (${totalRotas} rotas previstas em ${blocosValidos} onda${blocosValidos>1?'s':''}, numeração até ${maxVaga})`
+      : '';
+    mostrarAviso('Planilha importada', 'Quantidades e agenda por vaga atualizadas com sucesso a partir da planilha' + detalheOndas + '.');
   }catch(err){
     console.error('Falha ao importar planilha', err);
     mostrarAviso('Erro ao ler planilha', 'Não consegui ler esse arquivo. Confira se é um .xlsx válido.');
