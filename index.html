@@ -435,6 +435,15 @@
       <label>Limite de TMC para contar como ofensor no relatório (min)</label>
       <input type="number" id="cfgLimiteTMC" min="1">
     </div>
+    <div class="field campo-admin">
+      <label>Importar vagas/docas/pendentes via planilha (.xlsx)</label>
+      <input type="file" id="inputPlanilha" accept=".xlsx,.xls">
+      <p style="font-size:11px; color:var(--text-dim); margin-top:6px; line-height:1.4;">
+        Na primeira aba da planilha, use uma coluna A com os rótulos "Vagas", "Docas" e/ou
+        "Pendentes" e a coluna B com o número correspondente. As quantidades são aplicadas
+        assim que o arquivo é selecionado.
+      </p>
+    </div>
     <div class="field campo-master">
       <label>Usuário administrador master</label>
       <input type="text" id="cfgMasterUser" placeholder="Ex: master">
@@ -461,6 +470,7 @@
   </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // ======================================================================
@@ -1044,6 +1054,63 @@ function ajustarLista(group, novoTotal){
     state[group] = lista.slice(0, novoTotal);
   }
 }
+
+document.getElementById('inputPlanilha').addEventListener('change', async (e)=>{
+  const file = e.target.files[0];
+  if(!file) return;
+
+  try{
+    const buffer = await file.arrayBuffer();
+    const wb = XLSX.read(buffer, { type: 'array' });
+    const primeiraAba = wb.SheetNames[0];
+    const linhas = XLSX.utils.sheet_to_json(wb.Sheets[primeiraAba], { header: 1 });
+
+    let novaVagas = null, novaDocas = null, novoPendentes = null;
+    linhas.forEach(linha=>{
+      if(!linha || linha.length < 2) return;
+      const chave = String(linha[0] || '').trim().toLowerCase();
+      const valor = parseInt(linha[1], 10);
+      if(isNaN(valor)) return;
+      if(chave.includes('vaga')) novaVagas = valor;
+      else if(chave.includes('doca')) novaDocas = valor;
+      else if(chave.includes('pendente')) novoPendentes = valor;
+    });
+
+    if(novaVagas === null && novaDocas === null && novoPendentes === null){
+      mostrarAviso('Planilha não reconhecida', 'Não encontrei linhas com "Vagas", "Docas" ou "Pendentes" na primeira coluna. Confira o formato do arquivo.');
+      e.target.value = '';
+      return;
+    }
+
+    if(novaVagas !== null){
+      const total = Math.max(0, Math.min(200, novaVagas));
+      ajustarLista('vagas', total);
+      state.config.totalVagas = total;
+      document.getElementById('cfgTotalVagas').value = total;
+      document.getElementById('gridVagas').innerHTML = '';
+    }
+    if(novaDocas !== null){
+      const total = Math.max(0, Math.min(100, novaDocas));
+      ajustarLista('docas', total);
+      state.config.totalDocas = total;
+      document.getElementById('cfgTotalDocas').value = total;
+      document.getElementById('gridDocas').innerHTML = '';
+    }
+    if(novoPendentes !== null){
+      state.config.pendentesQtd = Math.max(0, novoPendentes);
+      state.config.pendentesData = hojeLocalISO();
+    }
+
+    render();
+    await persist();
+    e.target.value = '';
+    mostrarAviso('Planilha importada', 'Quantidades atualizadas com sucesso a partir da planilha.');
+  }catch(err){
+    console.error('Falha ao importar planilha', err);
+    mostrarAviso('Erro ao ler planilha', 'Não consegui ler esse arquivo. Confira se é um .xlsx válido.');
+    e.target.value = '';
+  }
+});
 
 document.getElementById('btnSalvarConfig').addEventListener('click', async ()=>{
   const nome = document.getElementById('cfgNome').value.trim() || 'Controle de Vagas';
