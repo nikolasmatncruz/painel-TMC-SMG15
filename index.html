@@ -461,19 +461,18 @@
   </div>
 </div>
 
-<script type="module">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
 // ======================================================================
 // CONFIGURAÇÃO DO SUPABASE — troque pelos dados do SEU projeto
 // (Painel do Supabase > Project Settings > Data API: "Project URL" e
 // "anon public" key). Veja as instruções enviadas junto com este arquivo
 // para o passo a passo completo de criação do projeto e da tabela.
 // ======================================================================
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-
 const SUPABASE_URL = "https://wzkxrppekvltepmtwshm.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_s-Qu39ZVwoEnX0GRipC7jA_seOSMPb0";
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const TABELA = "painel_estado";
 const ID_LINHA = "estado";
 // ======================================================================
@@ -545,7 +544,7 @@ function aplicarMigracoes(){
 
 async function loadState(){
   try{
-    const { data, error } = await supabase.from(TABELA).select('dados').eq('id', ID_LINHA).maybeSingle();
+    const { data, error } = await sb.from(TABELA).select('dados').eq('id', ID_LINHA).maybeSingle();
     if(error) throw error;
     if(data && data.dados){
       state = data.dados;
@@ -565,7 +564,7 @@ async function persist(){
     saving = true;
     podarHistorico();
     ignorarProximaAtualizacao = true;
-    const { error } = await supabase.from(TABELA).upsert({ id: ID_LINHA, dados: state });
+    const { error } = await sb.from(TABELA).upsert({ id: ID_LINHA, dados: state });
     if(error) throw error;
   }catch(e){
     console.error('Falha ao salvar no Supabase — confira a configuração no topo do arquivo.', e);
@@ -577,7 +576,7 @@ async function persist(){
 // Sincronização em tempo real: qualquer dispositivo que alterar o estado
 // atualiza todos os outros quase instantaneamente, sem precisar de polling.
 function iniciarSincronizacaoTempoReal(){
-  supabase
+  sb
     .channel('painel-realtime')
     .on('postgres_changes', { event: '*', schema: 'public', table: TABELA, filter: `id=eq.${ID_LINHA}` }, (payload)=>{
       if(ignorarProximaAtualizacao){ ignorarProximaAtualizacao = false; return; }
@@ -595,7 +594,7 @@ function iniciarSincronizacaoTempoReal(){
 
 async function buscarEstadoRemoto(){
   try{
-    const { data, error } = await supabase.from(TABELA).select('dados').eq('id', ID_LINHA).maybeSingle();
+    const { data, error } = await sb.from(TABELA).select('dados').eq('id', ID_LINHA).maybeSingle();
     if(error) throw error;
     if(data && data.dados) return data.dados;
   }catch(e){ /* ignora erro transitório de leitura */ }
