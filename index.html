@@ -662,8 +662,8 @@ function renderGrid(gridEl, group){
       valEl.textContent = 'LIVRE';
       placaEl.textContent = '';
       const previstos = (state.agenda && state.agenda[group] && state.agenda[group][item.id]) || [];
-      const nomes = [...new Set(previstos.map(p=>p.transportadora).filter(Boolean))];
-      agendaEl.textContent = nomes.length ? nomes.join(', ') : '';
+      const rotas = [...new Set(previstos.map(p=>p.rota).filter(Boolean))];
+      agendaEl.textContent = rotas.length ? rotas.join(', ') : '';
       counts.livres++;
     } else {
       valEl.textContent = fmtDuration(Date.now() - item.entryTs);
@@ -1074,6 +1074,15 @@ function ajustarLista(group, novoTotal){
   }
 }
 
+// Reconstrói a lista (vagas ou docas) usando exatamente os números informados
+// (não necessariamente sequenciais nem começando em 1), preservando o estado
+// de ocupação de quem já existia com aquele mesmo número.
+function definirListaPorNumeros(group, numeros){
+  const antigos = {};
+  (state[group] || []).forEach(item => { antigos[item.id] = item; });
+  state[group] = numeros.map(n => antigos[n] || { id:n, status:'livre', placa:null, motorista:null, entryTs:null });
+}
+
 // Lê os blocos de "onda" (Rota | Transp. | Vaga | espaçador, repetidos lado a
 // lado). Um bloco é considerado válido quando sua coluna de "vaga" tem pelo
 // menos um valor numérico — assim que um bloco não tem número nenhum ali,
@@ -1129,6 +1138,25 @@ function lerBlocosDeOnda(linhas){
   return { blocosValidos, totalRotas, maxVaga, agenda };
 }
 
+// Planilhas que trazem vagas e docas juntas costumam ter os blocos de doca
+// bem mais abaixo, com um título contendo "ONDA" e "DOCA" (ex: "1ª ONDA -
+// DOCA"). Tudo a partir dessa linha é tratado como seção de docas; tudo
+// antes dela é tratado como seção de vagas.
+function encontrarInicioSecaoDoca(linhas){
+  for(let r=0; r<linhas.length; r++){
+    const linha = linhas[r];
+    if(!linha) continue;
+    for(let c=0; c<linha.length; c++){
+      const v = linha[c];
+      if(v && typeof v === 'string'){
+        const t = v.toUpperCase();
+        if(t.includes('ONDA') && t.includes('DOCA')) return r;
+      }
+    }
+  }
+  return -1;
+}
+
 document.getElementById('inputPlanilha').addEventListener('change', async (e)=>{
   const file = e.target.files[0];
   if(!file) return;
@@ -1139,7 +1167,8 @@ document.getElementById('inputPlanilha').addEventListener('change', async (e)=>{
     const primeiraAba = wb.SheetNames[0];
     const linhas = XLSX.utils.sheet_to_json(wb.Sheets[primeiraAba], { header: 1 });
 
-    // Formato simples "rótulo | valor" (Vagas / Docas / Pendentes)
+    // Formato simples "rótulo | valor" (Vagas / Docas / Pendentes) — mantido
+    // como alternativa/fallback pra planilhas mais simples.
     let vagasSimples = null, docasSimples = null, pendentesSimples = null;
     linhas.forEach(linha=>{
       if(!linha || linha.length < 2) return;
@@ -1151,51 +1180,69 @@ document.getElementById('inputPlanilha').addEventListener('change', async (e)=>{
       else if(chave.includes('pendente')) pendentesSimples = valor;
     });
 
-    // Formato de "ondas" (Rota | Transp. | Vaga), como na planilha de expedição —
-    // agora também guarda a agenda (rota/transportadora prevista) por vaga.
-    const { blocosValidos, totalRotas, maxVaga, agenda } = lerBlocosDeOnda(linhas);
+    // Formato de "ondas" (Rota | Transp. | Vaga/Doca). Se existir uma seção
+    // com título "ONDA - DOCA", tudo a partir dali vira a leitura de docas;
+    // o restante, acima, é lido como vagas.
+    const inicioDoca = encontrarInicioSecaoDoca(linhas);
+    const linhasVaga = inicioDoca !== -1 ? linhas.slice(0, inicioDoca) : linhas;
+    const linhasDoca = inicioDoca !== -1 ? linhas.slice(inicioDoca) : [];
 
-    const novaVagas = blocosValidos > 0 ? maxVaga : vagasSimples;
-    const novaDocas = docasSimples;
-    const novoPendentes = pendentesSimples;
+    const resultadoVaga = lerBlocosDeOnda(linhasVaga);
+    const resultadoDoca = linhasDoca.length ? lerBlocosDeOnda(linhasDoca) : { blocosValidos:0, totalRotas:0, maxVaga:0, agenda:{} };
 
-    if(novaVagas === null && novaDocas === null && novoPendentes === null){
-      mostrarAviso('Planilha não reconhecida', 'Não encontrei blocos de onda (Rota/Transp./Vaga) nem linhas com "Vagas", "Docas" ou "Pendentes". Confira o formato do arquivo.');
+    const numerosVaga = resultadoVaga.blocosValidos > 0 ? Object.keys(resultadoVaga.agenda).map(Number).sort((a,b)=>a-b) : null;
+    const numerosDoca = resultadoDoca.blocosValidos > 0 ? Object.keys(resultadoDoca.agenda).map(Number).sort((a,b)=>a-b) : null;
+
+    if(!numerosVaga && !numerosDoca && vagasSimples === null && docasSimples === null && pendentesSimples === null){
+      mostrarAviso('Planilha não reconhecida', 'Não encontrei blocos de onda (Rota/Transp./Vaga ou Rota/Transp./Doca) nem linhas com "Vagas", "Docas" ou "Pendentes". Confira o formato do arquivo.');
       e.target.value = '';
       return;
     }
 
-    if(novaVagas !== null){
-      const total = Math.max(0, Math.min(200, novaVagas));
+    if(!state.agenda) state.agenda = { vagas:{}, docas:{} };
+
+    if(numerosVaga){
+      definirListaPorNumeros('vagas', numerosVaga);
+      state.config.totalVagas = numerosVaga.length;
+      document.getElementById('cfgTotalVagas').value = numerosVaga.length;
+      document.getElementById('gridVagas').innerHTML = '';
+      state.agenda.vagas = resultadoVaga.agenda;
+    } else if(vagasSimples !== null){
+      const total = Math.max(0, Math.min(200, vagasSimples));
       ajustarLista('vagas', total);
       state.config.totalVagas = total;
       document.getElementById('cfgTotalVagas').value = total;
       document.getElementById('gridVagas').innerHTML = '';
     }
-    if(novaDocas !== null){
-      const total = Math.max(0, Math.min(100, novaDocas));
+
+    if(numerosDoca){
+      definirListaPorNumeros('docas', numerosDoca);
+      state.config.totalDocas = numerosDoca.length;
+      document.getElementById('cfgTotalDocas').value = numerosDoca.length;
+      document.getElementById('gridDocas').innerHTML = '';
+      state.agenda.docas = resultadoDoca.agenda;
+    } else if(docasSimples !== null){
+      const total = Math.max(0, Math.min(100, docasSimples));
       ajustarLista('docas', total);
       state.config.totalDocas = total;
       document.getElementById('cfgTotalDocas').value = total;
       document.getElementById('gridDocas').innerHTML = '';
     }
-    if(novoPendentes !== null){
-      state.config.pendentesQtd = Math.max(0, novoPendentes);
+
+    if(pendentesSimples !== null){
+      state.config.pendentesQtd = Math.max(0, pendentesSimples);
       state.config.pendentesData = hojeLocalISO();
-    }
-    if(blocosValidos > 0){
-      if(!state.agenda) state.agenda = { vagas:{}, docas:{} };
-      state.agenda.vagas = agenda;
     }
 
     render();
     await persist();
     e.target.value = '';
 
-    const detalheOndas = blocosValidos > 0
-      ? ` (${totalRotas} rotas previstas em ${blocosValidos} onda${blocosValidos>1?'s':''}, numeração até ${maxVaga})`
-      : '';
-    mostrarAviso('Planilha importada', 'Quantidades e agenda por vaga atualizadas com sucesso a partir da planilha' + detalheOndas + '.');
+    const partesMsg = [];
+    if(numerosVaga) partesMsg.push(`${numerosVaga.length} vagas (${resultadoVaga.totalRotas} rotas em ${resultadoVaga.blocosValidos} onda${resultadoVaga.blocosValidos>1?'s':''})`);
+    if(numerosDoca) partesMsg.push(`${numerosDoca.length} docas (${resultadoDoca.totalRotas} rotas em ${resultadoDoca.blocosValidos} onda${resultadoDoca.blocosValidos>1?'s':''})`);
+    const detalhe = partesMsg.length ? ': ' + partesMsg.join(' · ') : '';
+    mostrarAviso('Planilha importada', 'Numeração e agenda atualizadas a partir da planilha' + detalhe + '.');
   }catch(err){
     console.error('Falha ao importar planilha', err);
     mostrarAviso('Erro ao ler planilha', 'Não consegui ler esse arquivo. Confira se é um .xlsx válido.');
