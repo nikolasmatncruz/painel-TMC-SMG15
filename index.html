@@ -1165,7 +1165,22 @@ document.getElementById('inputPlanilha').addEventListener('change', async (e)=>{
     const buffer = await file.arrayBuffer();
     const wb = XLSX.read(buffer, { type: 'array' });
     const primeiraAba = wb.SheetNames[0];
-    const linhas = XLSX.utils.sheet_to_json(wb.Sheets[primeiraAba], { header: 1 });
+    const ws = wb.Sheets[primeiraAba];
+
+    // Algumas planilhas salvam uma "área usada" (dimensão interna do
+    // arquivo) menor do que o conteúdo real, o que faz o leitor ignorar
+    // linhas mais abaixo (como um bloco de docas adicionado depois). Por
+    // isso calculamos o alcance real célula por célula, em vez de confiar
+    // apenas no `!ref` do arquivo.
+    let maxRow = 0, maxCol = 0;
+    Object.keys(ws).forEach(endereco=>{
+      if(endereco[0] === '!') return;
+      const c = XLSX.utils.decode_cell(endereco);
+      if(c.r > maxRow) maxRow = c.r;
+      if(c.c > maxCol) maxCol = c.c;
+    });
+    const rangeReal = { s:{ r:0, c:0 }, e:{ r:maxRow, c:maxCol } };
+    const linhas = XLSX.utils.sheet_to_json(ws, { header: 1, range: rangeReal });
 
     // Formato simples "rótulo | valor" (Vagas / Docas / Pendentes) — mantido
     // como alternativa/fallback pra planilhas mais simples.
