@@ -172,6 +172,7 @@
       <span class="clock" id="relogio">--:--:--</span>
       <span class="clock" id="sessaoLabel" style="display:none;"></span>
       <button class="settings-btn" id="btnLogoutGeral" style="display:none;">Sair</button>
+      <button class="settings-btn" id="btnSnapshotPDF">Snapshot (PDF)</button>
       <button class="settings-btn" id="btnFullscreen">Tela cheia</button>
       <button class="settings-btn" id="btnConfig">Ajustes</button>
     </div>
@@ -196,6 +197,12 @@
       <div class="horario-valores">
         <span>Início: <strong id="hRealInicio">--:--</strong></span>
         <span>Fim: <strong id="hRealFim">--:--</strong></span>
+      </div>
+    </div>
+    <div class="horario-bloco">
+      <div class="horario-titulo">Projeção de término</div>
+      <div class="horario-valores">
+        <strong id="hProjecaoTexto">--:--</strong>
       </div>
     </div>
   </div>
@@ -250,6 +257,8 @@
         <div id="relResumo" class="stats" style="padding:0 0 16px;"></div>
         <div id="relGraficos" style="margin-bottom:20px;"></div>
         <div id="relTabelaWrap"></div>
+        <div id="relTendencia" style="margin-top:26px;"></div>
+        <div id="relRanking" style="margin-top:26px;"></div>
       </div>
     </div>
   </main>
@@ -598,12 +607,59 @@ function calcularHorarioRealDoDia(){
   };
 }
 
+function horaStringParaTimestampHoje(horaStr){
+  if(!horaStr) return null;
+  const partes = horaStr.split(':').map(Number);
+  const d = new Date();
+  d.setHours(partes[0] || 0, partes[1] || 0, 0, 0);
+  return d.getTime();
+}
+
+// Projeta o horário de término com base no ritmo de liberações desde o
+// início real da operação. Só projeta se já houve pelo menos 1 liberação
+// hoje (sem dado, não dá pra estimar ritmo nenhum).
+function calcularProjecaoTermino(){
+  const hoje = dateKeyLocal(Date.now());
+  const real = calcularHorarioRealDoDia();
+  if(!real.inicio) return null;
+
+  const liberadosHoje = (state.historico || []).filter(r => r.dateKey === hoje).length;
+  if(liberadosHoje === 0) return null;
+
+  const pendentes = state.config.pendentesQtd || 0;
+  if(pendentes <= 0) return { concluido: true };
+
+  const decorridoMs = Date.now() - real.inicio;
+  const ritmoMsPorVeiculo = decorridoMs / liberadosHoje;
+  const restanteMs = ritmoMsPorVeiculo * pendentes;
+
+  return { previsaoTs: Date.now() + restanteMs, pendentes, liberadosHoje };
+}
+
 function atualizarHorarios(){
   document.getElementById('hPrevInicio').textContent = state.config.previstoInicio || '--:--';
   document.getElementById('hPrevFim').textContent = state.config.previstoFim || '--:--';
   const real = calcularHorarioRealDoDia();
   document.getElementById('hRealInicio').textContent = fmtHora(real.inicio);
   document.getElementById('hRealFim').textContent = fmtHora(real.fim);
+
+  const elProj = document.getElementById('hProjecaoTexto');
+  const projecao = calcularProjecaoTermino();
+  if(!projecao){
+    elProj.textContent = 'aguardando dados';
+  } else if(projecao.concluido){
+    elProj.textContent = 'concluída';
+  } else {
+    let texto = fmtHora(projecao.previsaoTs);
+    if(state.config.previstoFim){
+      const previstoTs = horaStringParaTimestampHoje(state.config.previstoFim);
+      const diffMin = Math.round((projecao.previsaoTs - previstoTs) / 60000);
+      if(diffMin > 5) texto += ` (atraso de ${diffMin} min)`;
+      else if(diffMin < -5) texto += ` (adiantado ${Math.abs(diffMin)} min)`;
+      else texto += ' (no previsto)';
+    }
+    elProj.textContent = texto;
+  }
 }
 
 function podarHistorico(){
@@ -1633,6 +1689,70 @@ function gerarGraficosSVG(todos, limite){
   '</div>';
 }
 
+// Tendência do TMC médio dia a dia, olhando todo o histórico retido (até
+// HISTORICO_MAX_DIAS dias). Usada pra ver se a operação está melhorando ou
+// piorando ao longo do tempo, não só no dia selecionado.
+function gerarTendenciaSVG(){
+  const porDia = {};
+  (state.historico || []).forEach(r=>{
+    if(!porDia[r.dateKey]) porDia[r.dateKey] = { soma:0, qtd:0 };
+    porDia[r.dateKey].soma += r.durMin;
+    porDia[r.dateKey].qtd += 1;
+  });
+  const dias = Object.keys(porDia).sort();
+  if(dias.length < 2){
+    return '<div class="rel-empty">Ainda não há dias suficientes pra mostrar uma tendência.</div>';
+  }
+
+  const valores = dias.map(d => Math.round(porDia[d].soma / porDia[d].qtd));
+  const largura = 460, altura = 170, padding = 26;
+  const maxVal = Math.max(...valores, state.config.limiteTMC) * 1.1;
+  const passoX = dias.length > 1 ? (largura - padding*2) / (dias.length - 1) : 0;
+
+  const coordY = v => altura - padding - (v/maxVal) * (altura - padding*2);
+
+  const pontos = valores.map((v,i)=> `${padding + i*passoX},${coordY(v)}`).join(' ');
+  const circulos = valores.map((v,i)=>{
+    const cor = v >= state.config.limiteTMC ? 'var(--vermelho-text)' : 'var(--verde-text)';
+    return `<circle cx="${padding + i*passoX}" cy="${coordY(v)}" r="3.5" fill="${cor}"></circle>`;
+  }).join('');
+  const rotulosX = dias.map((d,i)=>{
+    const [,mes,dia] = d.split('-');
+    return `<text x="${padding + i*passoX}" y="${altura-6}" font-size="9" fill="var(--text-dim)" text-anchor="middle">${dia}/${mes}</text>`;
+  }).join('');
+  const linhaLimite = coordY(state.config.limiteTMC);
+
+  return `<svg viewBox="0 0 ${largura} ${altura}" width="100%" style="max-width:${largura}px; height:auto;">
+    <line x1="${padding}" y1="${linhaLimite}" x2="${largura-padding}" y2="${linhaLimite}" stroke="var(--vermelho-text)" stroke-width="1" stroke-dasharray="4 3"></line>
+    <polyline points="${pontos}" fill="none" stroke="var(--accent)" stroke-width="2"></polyline>
+    ${circulos}
+    ${rotulosX}
+  </svg>`;
+}
+
+// Ranking de transportadoras com mais ocorrências acima do limite de TMC,
+// somando todo o período retido (não só o dia selecionado no relatório).
+function gerarRankingOfensoresHTML(){
+  const contagem = {};
+  (state.historico || []).forEach(r=>{
+    if(r.durMin >= state.config.limiteTMC){
+      const nome = (r.motorista && r.motorista.trim()) || 'Não informado';
+      contagem[nome] = (contagem[nome] || 0) + 1;
+    }
+  });
+  const ranking = Object.entries(contagem).sort((a,b) => b[1]-a[1]).slice(0, 10);
+  if(ranking.length === 0){
+    return '<div class="rel-empty">Nenhum ofensor registrado no período retido.</div>';
+  }
+  const linhas = ranking.map(([nome,qtd], i) => `
+    <tr class="${qtd>=5 ? 'ofensor' : ''}">
+      <td>${i+1}º</td>
+      <td class="placa-col">${nome}</td>
+      <td>${qtd} ocorrência${qtd>1?'s':''}</td>
+    </tr>`).join('');
+  return `<table class="rel"><thead><tr><th>#</th><th>Transportadora</th><th>Acima do limite</th></tr></thead><tbody>${linhas}</tbody></table>`;
+}
+
 function renderRelatorio(){
   const { dataSel, soOfensores, limite, todos, registros, qtd, tmcMedio, ofensores, pctOfensores } = obterRegistrosRelatorio();
 
@@ -1647,6 +1767,13 @@ function renderRelatorio(){
   `;
 
   document.getElementById('relGraficos').innerHTML = gerarGraficosSVG(todos, limite);
+
+  // Tendência e ranking são referentes ao período retido inteiro, não só à
+  // data selecionada — por isso ficam fora do "return" antecipado abaixo.
+  document.getElementById('relTendencia').innerHTML =
+    '<div class="section-title" style="margin-top:0;">TENDÊNCIA DE TMC (ÚLTIMOS ' + HISTORICO_MAX_DIAS + ' DIAS)</div>' + gerarTendenciaSVG();
+  document.getElementById('relRanking').innerHTML =
+    '<div class="section-title" style="margin-top:0;">RANKING DE OFENSORES (ÚLTIMOS ' + HISTORICO_MAX_DIAS + ' DIAS)</div>' + gerarRankingOfensoresHTML();
 
   const wrap = document.getElementById('relTabelaWrap');
   if(registros.length === 0){
@@ -1769,6 +1896,91 @@ function exportarPDF(){
 
 document.getElementById('btnExportarCSV').addEventListener('click', exportarCSV);
 document.getElementById('btnExportarPDF').addEventListener('click', exportarPDF);
+
+// Snapshot ao vivo (passagem de turno): mostra a foto atual de todas as
+// vagas/docas — quem está ocupando, ou o que está previsto pra quem ainda
+// está livre — além dos horários e da projeção de término.
+function exportarSnapshotPDF(){
+  const janela = window.open('', '_blank');
+  if(!janela){
+    alert('Não foi possível abrir a janela de impressão. Verifique se o navegador está bloqueando pop-ups para este site.');
+    return;
+  }
+
+  const agora = new Date();
+  const real = calcularHorarioRealDoDia();
+  const projecao = calcularProjecaoTermino();
+
+  let textoProjecao = 'aguardando dados';
+  if(projecao && projecao.concluido) textoProjecao = 'concluída';
+  else if(projecao) textoProjecao = fmtHora(projecao.previsaoTs);
+
+  function linhaPosicao(item, rotulo, group){
+    if(item.status === 'ocupada'){
+      return '<tr style="font-weight:600;">' +
+        '<td>' + rotulo + ' ' + String(item.id).padStart(2,'0') + '</td>' +
+        '<td>Ocupada</td>' +
+        '<td>' + (item.placa || '—') + '</td>' +
+        '<td>' + (item.motorista || '—') + '</td>' +
+        '<td>' + fmtDuration(Date.now() - item.entryTs) + '</td>' +
+      '</tr>';
+    }
+    const previstos = (state.agenda && state.agenda[group] && state.agenda[group][item.id]) || [];
+    const rotas = [...new Set(previstos.map(p=>p.rota).filter(Boolean))].join(', ');
+    return '<tr>' +
+      '<td>' + rotulo + ' ' + String(item.id).padStart(2,'0') + '</td>' +
+      '<td>Livre</td>' +
+      '<td colspan="2">' + (rotas || '—') + '</td>' +
+      '<td></td>' +
+    '</tr>';
+  }
+
+  const linhasVagas = (state.vagas || []).map(item => linhaPosicao(item, 'Vaga', 'vagas')).join('');
+  const linhasDocas = (state.docas || []).map(item => linhaPosicao(item, 'Doca', 'docas')).join('');
+
+  const html = '<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">' +
+    '<title>Snapshot — ' + (state.config.nome || 'Painel de Vagas') + '</title>' +
+    '<style>' +
+    'body{ font-family: Arial, Helvetica, sans-serif; color:#1c2430; padding:28px; }' +
+    'h1{ font-size:20px; margin:0 0 2px; }' +
+    '.sub{ color:#6b7686; font-size:13px; margin:0 0 20px; }' +
+    '.resumo{ display:flex; gap:24px; margin-bottom:22px; flex-wrap:wrap; }' +
+    '.resumo div{ text-align:center; }' +
+    '.resumo .num{ font-size:18px; font-weight:700; }' +
+    '.resumo .lbl{ font-size:11px; color:#6b7686; }' +
+    'h2{ font-size:14px; margin:22px 0 8px; }' +
+    'table{ width:100%; border-collapse:collapse; font-size:12px; }' +
+    'th,td{ text-align:left; padding:6px 8px; border-bottom:1px solid #dde3ec; }' +
+    'th{ color:#6b7686; font-size:10px; text-transform:uppercase; }' +
+    '@media print{ .no-print{ display:none; } }' +
+    '</style></head><body>' +
+    '<h1>Snapshot do painel — ' + (state.config.nome || 'Painel de Vagas') + '</h1>' +
+    '<p class="sub">Gerado em ' + agora.toLocaleDateString('pt-BR') + ' às ' + agora.toLocaleTimeString('pt-BR') + '</p>' +
+    '<div class="resumo">' +
+      '<div><div class="num">' + fmtHora(state.config.previstoInicio ? horaStringParaTimestampHoje(state.config.previstoInicio) : null) + '</div><div class="lbl">Previsto início</div></div>' +
+      '<div><div class="num">' + fmtHora(state.config.previstoFim ? horaStringParaTimestampHoje(state.config.previstoFim) : null) + '</div><div class="lbl">Previsto fim</div></div>' +
+      '<div><div class="num">' + fmtHora(real.inicio) + '</div><div class="lbl">Real início</div></div>' +
+      '<div><div class="num">' + fmtHora(real.fim) + '</div><div class="lbl">Real fim (até agora)</div></div>' +
+      '<div><div class="num">' + textoProjecao + '</div><div class="lbl">Projeção de término</div></div>' +
+      '<div><div class="num">' + state.config.pendentesQtd + '</div><div class="lbl">Pendentes</div></div>' +
+    '</div>' +
+    '<h2>VAGAS</h2>' +
+    '<table><thead><tr><th>Posição</th><th>Status</th><th>Placa</th><th>Motorista/Rota prevista</th><th>Tempo</th></tr></thead>' +
+    '<tbody>' + linhasVagas + '</tbody></table>' +
+    '<h2>DOCAS</h2>' +
+    '<table><thead><tr><th>Posição</th><th>Status</th><th>Placa</th><th>Motorista/Rota prevista</th><th>Tempo</th></tr></thead>' +
+    '<tbody>' + linhasDocas + '</tbody></table>' +
+    '<p class="no-print" style="margin-top:24px; font-size:12px; color:#6b7686;">Use "Salvar como PDF" na janela de impressão do navegador.</p>' +
+    '</body></html>';
+
+  janela.document.open();
+  janela.document.write(html);
+  janela.document.close();
+  janela.onload = function(){ janela.focus(); janela.print(); };
+  setTimeout(function(){ try{ janela.focus(); janela.print(); }catch(e){} }, 400);
+}
+
+document.getElementById('btnSnapshotPDF').addEventListener('click', exportarSnapshotPDF);
 
 function tickClock(){
   const now = new Date();
