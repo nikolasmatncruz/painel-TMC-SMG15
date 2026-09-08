@@ -465,6 +465,17 @@
       <div id="listaContas"></div>
     </div>
 
+    <div id="secaoManutencao" style="display:none; margin:18px 0; border:1px solid var(--panel-line); border-radius:8px; padding:12px;">
+      <div class="section-title" style="margin:0 0 10px;">MANUTENÇÃO DO DIA</div>
+      <p style="font-size:11px; color:var(--text-dim); margin:0 0 10px; line-height:1.4;">
+        Ações destrutivas — use pra limpar dados de teste. Não podem ser desfeitas.
+      </p>
+      <div style="display:flex; gap:10px; flex-wrap:wrap;">
+        <button type="button" class="btn-ghost" id="btnLimparHistoricoHoje">Limpar histórico de hoje</button>
+        <button type="button" class="btn-ghost" id="btnZerarOcupacoes">Zerar vagas/docas (voltar p/ livre)</button>
+      </div>
+    </div>
+
     <div class="modal-actions">
       <button class="btn-ghost" data-close="overlayConfig">Cancelar</button>
       <button class="btn-primary" id="btnSalvarConfig">Salvar</button>
@@ -944,6 +955,7 @@ function abrirAjustesModal(){
     inp.disabled = !souMaster;
   });
   document.getElementById('ajustesAvisoUsuario').style.display = acessoTotal ? 'none' : '';
+  document.getElementById('secaoManutencao').style.display = souMaster ? '' : 'none';
   renderAprovacoes();
 
   openOverlay('overlayConfig');
@@ -1014,6 +1026,30 @@ function mostrarAviso(titulo, msg){
   document.getElementById('avisoMsg').textContent = msg;
   openOverlay('overlayAviso');
 }
+
+document.getElementById('btnLimparHistoricoHoje').addEventListener('click', async ()=>{
+  if(!confirm('Tem certeza que deseja apagar todos os registros de HOJE do relatório? Essa ação não pode ser desfeita.')) return;
+  const hoje = hojeLocalISO();
+  state.historico = state.historico.filter(r => r.dateKey !== hoje);
+  render();
+  await persist();
+  mostrarAviso('Histórico limpo', 'Os registros de hoje foram removidos do relatório.');
+});
+
+document.getElementById('btnZerarOcupacoes').addEventListener('click', async ()=>{
+  if(!confirm('Tem certeza que deseja liberar TODAS as vagas e docas ocupadas agora? Essa ação não pode ser desfeita.')) return;
+  ['vagas','docas'].forEach(g=>{
+    (state[g] || []).forEach(item=>{
+      item.status = 'livre';
+      item.placa = null;
+      item.motorista = null;
+      item.entryTs = null;
+    });
+  });
+  render();
+  await persist();
+  mostrarAviso('Vagas e docas liberadas', 'Todas as posições foram marcadas como livres.');
+});
 
 document.getElementById('linkAbrirCadastro').addEventListener('click', (e)=>{
   e.preventDefault();
