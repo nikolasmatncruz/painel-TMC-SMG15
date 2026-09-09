@@ -92,6 +92,10 @@
   .overlay{ position:fixed; inset:0; background:rgba(4,7,14,.72); display:none; align-items:center; justify-content:center; z-index:50; padding:16px; }
   .overlay.show{ display:flex; }
   .modal{ background: var(--panel); border:1px solid var(--panel-line); border-radius:10px; width:100%; max-width:380px; padding:22px; position:relative; }
+  .modal-wide{ max-width:760px; }
+  .ajustes-grid{ display:grid; grid-template-columns:1fr 1fr; gap:0 24px; }
+  .ajustes-grid .campo-full{ grid-column:1 / -1; }
+  @media (max-width:640px){ .ajustes-grid{ grid-template-columns:1fr; } }
   .modal h2{ margin:0 0 4px; font-size:17px; }
   .modal .vaga-tag{ color:var(--accent); font-family:var(--mono); font-size:13px; margin-bottom:16px; }
   .field{ margin-bottom:14px; }
@@ -441,60 +445,63 @@
 </div>
 
 <div class="overlay" id="overlayConfig">
-  <div class="modal">
+  <div class="modal modal-wide">
     <button class="close-x" data-close="overlayConfig">✕</button>
     <h2>Ajustes do painel</h2>
     <p class="aviso-usuario" id="ajustesAvisoUsuario" style="display:none;">Login como usuário comum: só é possível alterar o nome do galpão. Fale com um administrador para os demais ajustes.</p>
-    <div class="field">
-      <label>Nome do galpão / operação</label>
-      <input type="text" id="cfgNome" placeholder="Ex: Expedição SMG15">
-    </div>
-    <div class="field campo-admin">
-      <label>Quantidade de vagas</label>
-      <input type="number" id="cfgTotalVagas" min="0" max="200">
-    </div>
-    <div class="field campo-admin">
-      <label>Quantidade de docas</label>
-      <input type="number" id="cfgTotalDocas" min="0" max="100">
-    </div>
-    <div class="field campo-admin">
-      <label>Minutos até "atenção" (laranja) na grade ao vivo</label>
-      <input type="number" id="cfgWarn" min="1">
-    </div>
-    <div class="field campo-admin">
-      <label>Minutos até "acima do limite" (vermelho) na grade ao vivo</label>
-      <input type="number" id="cfgAlert" min="1">
-    </div>
-    <div class="field campo-admin">
-      <label>Horário previsto de início</label>
-      <input type="time" id="cfgPrevistoInicio">
-    </div>
-    <div class="field campo-admin">
-      <label>Horário previsto de fim</label>
-      <input type="time" id="cfgPrevistoFim">
-    </div>
-    <div class="field campo-admin">
-      <label>Limite de TMC para contar como ofensor no relatório (min)</label>
-      <input type="number" id="cfgLimiteTMC" min="1">
-    </div>
-    <div class="field campo-admin">
-      <label>Importar vagas/docas/pendentes via planilha (.xlsx)</label>
-      <input type="file" id="inputPlanilha" accept=".xlsx,.xls">
-      <p style="font-size:11px; color:var(--text-dim); margin-top:6px; line-height:1.4;">
-        Na primeira aba da planilha, use uma coluna A com os rótulos "Vagas", "Docas" e/ou
-        "Pendentes" e a coluna B com o número correspondente. As quantidades são aplicadas
-        assim que o arquivo é selecionado.
-      </p>
-    </div>
-    <div class="field campo-master">
-      <label>Usuário administrador master</label>
-      <input type="text" id="cfgMasterUser" placeholder="Ex: master">
-    </div>
-    <div class="field campo-master">
-      <label>Senha administrador master</label>
-      <div class="campo-senha">
-        <input type="password" id="cfgMasterPass" placeholder="Ex: master123">
-        <button type="button" class="btn-olho" data-target="cfgMasterPass" aria-label="Mostrar senha">👁</button>
+
+    <div class="ajustes-grid">
+      <div class="field campo-full">
+        <label>Nome do galpão / operação</label>
+        <input type="text" id="cfgNome" placeholder="Ex: Expedição SMG15">
+      </div>
+      <div class="field campo-admin">
+        <label>Quantidade de vagas</label>
+        <input type="number" id="cfgTotalVagas" min="0" max="200">
+      </div>
+      <div class="field campo-admin">
+        <label>Quantidade de docas</label>
+        <input type="number" id="cfgTotalDocas" min="0" max="100">
+      </div>
+      <div class="field campo-admin">
+        <label>Minutos até "atenção" (laranja) na grade ao vivo</label>
+        <input type="number" id="cfgWarn" min="1">
+      </div>
+      <div class="field campo-admin">
+        <label>Minutos até "acima do limite" (vermelho) na grade ao vivo</label>
+        <input type="number" id="cfgAlert" min="1">
+      </div>
+      <div class="field campo-admin">
+        <label>Horário previsto de início</label>
+        <input type="time" id="cfgPrevistoInicio">
+      </div>
+      <div class="field campo-admin">
+        <label>Horário previsto de fim</label>
+        <input type="time" id="cfgPrevistoFim">
+      </div>
+      <div class="field campo-admin">
+        <label>Limite de TMC para contar como ofensor no relatório (min)</label>
+        <input type="number" id="cfgLimiteTMC" min="1">
+      </div>
+      <div class="field campo-admin campo-full">
+        <label>Importar vagas/docas/pendentes via planilha (.xlsx)</label>
+        <input type="file" id="inputPlanilha" accept=".xlsx,.xls">
+        <p style="font-size:11px; color:var(--text-dim); margin-top:6px; line-height:1.4;">
+          Na primeira aba da planilha, use uma coluna A com os rótulos "Vagas", "Docas" e/ou
+          "Pendentes" e a coluna B com o número correspondente. As quantidades são aplicadas
+          assim que o arquivo é selecionado.
+        </p>
+      </div>
+      <div class="field campo-master">
+        <label>Usuário administrador master</label>
+        <input type="text" id="cfgMasterUser" placeholder="Ex: master">
+      </div>
+      <div class="field campo-master">
+        <label>Senha administrador master</label>
+        <div class="campo-senha">
+          <input type="password" id="cfgMasterPass" placeholder="Ex: master123">
+          <button type="button" class="btn-olho" data-target="cfgMasterPass" aria-label="Mostrar senha">👁</button>
+        </div>
       </div>
     </div>
 
@@ -1900,6 +1907,25 @@ document.getElementById('btnExportarPDF').addEventListener('click', exportarPDF)
 // Snapshot ao vivo (passagem de turno): mostra a foto atual de todas as
 // vagas/docas — quem está ocupando, ou o que está previsto pra quem ainda
 // está livre — além dos horários e da projeção de término.
+function fmtDecorridoMs(ms){
+  if(ms == null || ms < 0) return '--';
+  const totalMin = Math.floor(ms/60000);
+  const h = Math.floor(totalMin/60);
+  const m = totalMin%60;
+  return (h>0 ? h+'h' : '') + m + 'm';
+}
+
+function gerarDonutSnapshot(pct, corCheia){
+  const raio=40, circunf=Math.round(2*Math.PI*raio*100)/100;
+  const arco = Math.round(circunf*(Math.max(0,Math.min(100,pct))/100)*100)/100;
+  return '<svg viewBox="0 0 120 120" width="100" height="100">' +
+    '<circle cx="60" cy="60" r="'+raio+'" fill="none" stroke="#e7e0c9" stroke-width="16"></circle>' +
+    '<circle cx="60" cy="60" r="'+raio+'" fill="none" stroke="'+corCheia+'" stroke-width="16" ' +
+    'stroke-dasharray="'+arco+' '+(circunf-arco)+'" stroke-dashoffset="'+(circunf*0.25)+'" stroke-linecap="round"></circle>' +
+    '<text x="60" y="66" text-anchor="middle" font-size="20" font-weight="800" fill="#111">'+Math.round(pct)+'%</text>' +
+    '</svg>';
+}
+
 function exportarSnapshotPDF(){
   const janela = window.open('', '_blank');
   if(!janela){
@@ -1910,67 +1936,100 @@ function exportarSnapshotPDF(){
   const agora = new Date();
   const real = calcularHorarioRealDoDia();
   const projecao = calcularProjecaoTermino();
+  const ritmo = calcularRitmoHoje();
 
   let textoProjecao = 'aguardando dados';
   if(projecao && projecao.concluido) textoProjecao = 'concluída';
   else if(projecao) textoProjecao = fmtHora(projecao.previsaoTs);
 
-  function linhaPosicao(item, rotulo, group){
-    if(item.status === 'ocupada'){
-      return '<tr style="font-weight:600;">' +
-        '<td>' + rotulo + ' ' + String(item.id).padStart(2,'0') + '</td>' +
-        '<td>Ocupada</td>' +
-        '<td>' + (item.placa || '—') + '</td>' +
-        '<td>' + (item.motorista || '—') + '</td>' +
-        '<td>' + fmtDuration(Date.now() - item.entryTs) + '</td>' +
-      '</tr>';
-    }
-    const previstos = (state.agenda && state.agenda[group] && state.agenda[group][item.id]) || [];
-    const rotas = [...new Set(previstos.map(p=>p.rota).filter(Boolean))].join(', ');
+  const previstoInicioTs = state.config.previstoInicio ? horaStringParaTimestampHoje(state.config.previstoInicio) : null;
+  const previstoFimTs = state.config.previstoFim ? horaStringParaTimestampHoje(state.config.previstoFim) : null;
+  let pctTurno = null;
+  if(previstoInicioTs && previstoFimTs && previstoFimTs > previstoInicioTs){
+    pctTurno = Math.round(Math.max(0, Math.min(100, ((Date.now()-previstoInicioTs)/(previstoFimTs-previstoInicioTs))*100)));
+  }
+  const decorrido = fmtDecorridoMs(real.inicio ? Date.now()-real.inicio : null);
+
+  function linhaOcupada(item, rotulo){
     return '<tr>' +
       '<td>' + rotulo + ' ' + String(item.id).padStart(2,'0') + '</td>' +
-      '<td>Livre</td>' +
-      '<td colspan="2">' + (rotas || '—') + '</td>' +
-      '<td></td>' +
+      '<td>' + (item.placa || '—') + '</td>' +
+      '<td>' + (item.motorista || '—') + '</td>' +
+      '<td>' + fmtDuration(Date.now() - item.entryTs) + '</td>' +
     '</tr>';
   }
 
-  const linhasVagas = (state.vagas || []).map(item => linhaPosicao(item, 'Vaga', 'vagas')).join('');
-  const linhasDocas = (state.docas || []).map(item => linhaPosicao(item, 'Doca', 'docas')).join('');
+  function montarBloco(group, rotulo){
+    const lista = state[group] || [];
+    const ocupadas = lista.filter(i => i.status === 'ocupada');
+    const livres = lista.length - ocupadas.length;
+    const pct = lista.length ? (ocupadas.length/lista.length)*100 : 0;
+    const linhas = ocupadas.length
+      ? ocupadas.map(item => linhaOcupada(item, rotulo)).join('')
+      : '<tr><td colspan="4" style="color:#8a8265; font-style:italic;">Nenhuma ' + rotulo.toLowerCase() + ' ocupada no momento.</td></tr>';
+    return { pct, ocupadas: ocupadas.length, livres, total: lista.length, linhas };
+  }
+
+  const bVagas = montarBloco('vagas', 'Vaga');
+  const bDocas = montarBloco('docas', 'Doca');
 
   const html = '<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">' +
     '<title>Snapshot — ' + (state.config.nome || 'Painel de Vagas') + '</title>' +
     '<style>' +
-    'body{ font-family: Arial, Helvetica, sans-serif; color:#1c2430; padding:28px; }' +
-    'h1{ font-size:20px; margin:0 0 2px; }' +
-    '.sub{ color:#6b7686; font-size:13px; margin:0 0 20px; }' +
-    '.resumo{ display:flex; gap:24px; margin-bottom:22px; flex-wrap:wrap; }' +
-    '.resumo div{ text-align:center; }' +
-    '.resumo .num{ font-size:18px; font-weight:700; }' +
-    '.resumo .lbl{ font-size:11px; color:#6b7686; }' +
-    'h2{ font-size:14px; margin:22px 0 8px; }' +
-    'table{ width:100%; border-collapse:collapse; font-size:12px; }' +
-    'th,td{ text-align:left; padding:6px 8px; border-bottom:1px solid #dde3ec; }' +
-    'th{ color:#6b7686; font-size:10px; text-transform:uppercase; }' +
+    '*{ box-sizing:border-box; }' +
+    'body{ font-family: Arial, Helvetica, sans-serif; color:#1a1a1a; margin:0; background:#faf6e9; }' +
+    '.topo{ background:#111; color:#ffe600; padding:14px 24px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; }' +
+    '.topo .nome{ font-weight:800; font-size:16px; letter-spacing:.3px; }' +
+    '.topo .data{ background:#ffe600; color:#111; padding:4px 10px; border-radius:5px; font-weight:700; font-size:12px; margin-right:10px; }' +
+    '.topo .gerado{ font-size:11px; color:#bbb; text-align:right; }' +
+    '.kpis{ display:flex; gap:22px; flex-wrap:wrap; align-items:center; padding:12px 24px; border-bottom:2px solid #111; font-size:12.5px; }' +
+    '.kpis b{ font-size:13px; }' +
+    '.barra{ flex:1; min-width:140px; background:#e7e0c9; border-radius:6px; height:9px; overflow:hidden; }' +
+    '.barra > div{ height:100%; background:#ffcc00; }' +
+    '.donuts{ display:flex; gap:34px; padding:18px 24px; flex-wrap:wrap; }' +
+    '.donut-card{ text-align:center; }' +
+    '.donut-card .legenda{ font-size:11px; color:#555; margin-top:4px; }' +
+    '.secao{ padding:0 24px 22px; }' +
+    '.secao h2{ font-size:12.5px; background:#111; color:#ffe600; padding:7px 12px; margin:0 0 8px; letter-spacing:.3px; }' +
+    '.resumo-linha{ font-size:11px; color:#6b6449; margin:6px 2px 0; }' +
+    'table{ width:100%; border-collapse:collapse; font-size:12px; background:#fffdf6; }' +
+    'th,td{ text-align:left; padding:6px 10px; border:1px solid #e7e0c9; }' +
+    'th{ background:#fff4c2; font-size:10px; text-transform:uppercase; color:#5c5430; }' +
     '@media print{ .no-print{ display:none; } }' +
     '</style></head><body>' +
-    '<h1>Snapshot do painel — ' + (state.config.nome || 'Painel de Vagas') + '</h1>' +
-    '<p class="sub">Gerado em ' + agora.toLocaleDateString('pt-BR') + ' às ' + agora.toLocaleTimeString('pt-BR') + '</p>' +
-    '<div class="resumo">' +
-      '<div><div class="num">' + fmtHora(state.config.previstoInicio ? horaStringParaTimestampHoje(state.config.previstoInicio) : null) + '</div><div class="lbl">Previsto início</div></div>' +
-      '<div><div class="num">' + fmtHora(state.config.previstoFim ? horaStringParaTimestampHoje(state.config.previstoFim) : null) + '</div><div class="lbl">Previsto fim</div></div>' +
-      '<div><div class="num">' + fmtHora(real.inicio) + '</div><div class="lbl">Real início</div></div>' +
-      '<div><div class="num">' + fmtHora(real.fim) + '</div><div class="lbl">Real fim (até agora)</div></div>' +
-      '<div><div class="num">' + textoProjecao + '</div><div class="lbl">Projeção de término</div></div>' +
-      '<div><div class="num">' + state.config.pendentesQtd + '</div><div class="lbl">Pendentes</div></div>' +
+    '<div class="topo">' +
+      '<div style="display:flex; align-items:center;">' +
+        '<span class="data">' + agora.toLocaleDateString('pt-BR') + '</span>' +
+        '<span class="nome">' + (state.config.nome || 'Painel de Vagas') + '</span>' +
+      '</div>' +
+      '<div class="gerado">Gerado às ' + agora.toLocaleTimeString('pt-BR') + '</div>' +
     '</div>' +
-    '<h2>VAGAS</h2>' +
-    '<table><thead><tr><th>Posição</th><th>Status</th><th>Placa</th><th>Motorista/Rota prevista</th><th>Tempo</th></tr></thead>' +
-    '<tbody>' + linhasVagas + '</tbody></table>' +
-    '<h2>DOCAS</h2>' +
-    '<table><thead><tr><th>Posição</th><th>Status</th><th>Placa</th><th>Motorista/Rota prevista</th><th>Tempo</th></tr></thead>' +
-    '<tbody>' + linhasDocas + '</tbody></table>' +
-    '<p class="no-print" style="margin-top:24px; font-size:12px; color:#6b7686;">Use "Salvar como PDF" na janela de impressão do navegador.</p>' +
+    '<div class="kpis">' +
+      '<span>Início <b>' + fmtHora(previstoInicioTs) + '</b></span>' +
+      '<span>Final <b>' + fmtHora(previstoFimTs) + '</b></span>' +
+      '<span>Decorrido <b>' + decorrido + '</b></span>' +
+      '<div class="barra"><div style="width:' + (pctTurno ?? 0) + '%;"></div></div>' +
+      '<span><b>' + (pctTurno!=null ? pctTurno+'%' : '--') + '</b></span>' +
+      '<span>Ritmo <b>' + (ritmo ? ritmo.toFixed(1)+' veíc/h' : '--') + '</b></span>' +
+      '<span>Previsão <b>' + textoProjecao + '</b></span>' +
+      '<span>Pendentes <b>' + state.config.pendentesQtd + '</b></span>' +
+      '<span>Liberados <b>' + (state.historico||[]).filter(r=>r.dateKey===dateKeyLocal(Date.now())).length + '</b></span>' +
+    '</div>' +
+    '<div class="donuts">' +
+      '<div class="donut-card">' + gerarDonutSnapshot(bVagas.pct, '#ffcc00') + '<div class="legenda">Ocupação de vagas (' + bVagas.ocupadas + '/' + bVagas.total + ')</div></div>' +
+      '<div class="donut-card">' + gerarDonutSnapshot(bDocas.pct, '#ffcc00') + '<div class="legenda">Ocupação de docas (' + bDocas.ocupadas + '/' + bDocas.total + ')</div></div>' +
+    '</div>' +
+    '<div class="secao">' +
+      '<h2>VAGAS OCUPADAS (' + bVagas.ocupadas + ')</h2>' +
+      '<table><thead><tr><th>Posição</th><th>Placa</th><th>Motorista</th><th>Tempo</th></tr></thead><tbody>' + bVagas.linhas + '</tbody></table>' +
+      '<div class="resumo-linha">+ ' + bVagas.livres + ' vaga(s) livre(s) no momento</div>' +
+    '</div>' +
+    '<div class="secao">' +
+      '<h2>DOCAS OCUPADAS (' + bDocas.ocupadas + ')</h2>' +
+      '<table><thead><tr><th>Posição</th><th>Placa</th><th>Motorista</th><th>Tempo</th></tr></thead><tbody>' + bDocas.linhas + '</tbody></table>' +
+      '<div class="resumo-linha">+ ' + bDocas.livres + ' doca(s) livre(s) no momento</div>' +
+    '</div>' +
+    '<p class="no-print" style="padding:0 24px 24px; font-size:12px; color:#6b6449;">Use "Salvar como PDF" na janela de impressão do navegador.</p>' +
     '</body></html>';
 
   janela.document.open();
