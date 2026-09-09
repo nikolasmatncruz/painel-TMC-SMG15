@@ -274,7 +274,11 @@
     <h2>Dar entrada</h2>
     <div class="vaga-tag" id="entradaVagaTag">Vaga 00</div>
     <p id="entradaAgendaHint" style="font-size:11px; color:var(--text-dim); margin:-8px 0 14px; line-height:1.4; display:none;"></p>
-    <div class="field">
+    <div class="field" id="campoGaiolaSelect" style="display:none;">
+      <label>Gaiola / rota a carregar agora</label>
+      <select id="inputGaiolaSelecionada" style="width:100%; background:#0c1524; border:1px solid var(--panel-line); border-radius:6px; padding:10px 11px; color:var(--text); font-family:var(--font); font-size:14px;"></select>
+    </div>
+    <div class="field" id="campoPlacaManual">
       <label>Placa do veículo</label>
       <input type="text" id="inputPlaca" placeholder="Ex: ABC1D23" autocomplete="off">
     </div>
@@ -883,19 +887,43 @@ function onItemClick(group, id){
   if(item.status === 'livre'){
     document.getElementById('entradaVagaTag').textContent = rotulo + ' ' + String(id).padStart(2,'0');
     document.getElementById('inputPlaca').value = '';
+
     const previstos = (state.agenda && state.agenda[group] && state.agenda[group][id]) || [];
+    const hoje = dateKeyLocal(Date.now());
+    const rotasJaUsadasHoje = new Set((state.historico || []).filter(r => r.dateKey === hoje).map(r => r.placa));
+    const disponiveis = previstos.filter(p => !rotasJaUsadasHoje.has(p.rota));
+
     const hintEl = document.getElementById('entradaAgendaHint');
+    const campoSelect = document.getElementById('campoGaiolaSelect');
+    const campoManual = document.getElementById('campoPlacaManual');
+    const selectEl = document.getElementById('inputGaiolaSelecionada');
+
     if(previstos.length){
-      document.getElementById('inputMotorista').value = previstos[0].transportadora || '';
       hintEl.textContent = 'Previsto hoje: ' + previstos.map(p => `${p.onda} — ${p.rota}${p.transportadora ? ' ('+p.transportadora+')' : ''}`).join(' · ');
       hintEl.style.display = '';
     } else {
-      document.getElementById('inputMotorista').value = '';
       hintEl.textContent = '';
       hintEl.style.display = 'none';
     }
+
+    if(disponiveis.length){
+      selectEl.innerHTML = disponiveis.map(p =>
+        `<option value="${p.rota}" data-transp="${(p.transportadora||'').replace(/"/g,'')}">${p.onda} — ${p.rota}${p.transportadora ? ' ('+p.transportadora+')' : ''}</option>`
+      ).join('') + '<option value="__outra__">Outra rota / gaiola (digitar manualmente)</option>';
+      selectEl.selectedIndex = 0;
+      campoSelect.style.display = '';
+      campoManual.style.display = 'none';
+      document.getElementById('inputMotorista').value = disponiveis[0].transportadora || '';
+    } else {
+      campoSelect.style.display = 'none';
+      campoManual.style.display = '';
+      document.getElementById('inputMotorista').value = '';
+    }
+
     openOverlay('overlayEntrada');
-    setTimeout(()=>document.getElementById('inputPlaca').focus(), 50);
+    setTimeout(()=>{
+      if(campoSelect.style.display === 'none') document.getElementById('inputPlaca').focus();
+    }, 50);
   } else {
     document.getElementById('saidaTitulo').textContent = rotulo + ' ocupada';
     document.getElementById('saidaVagaTag').textContent = rotulo + ' ' + String(id).padStart(2,'0');
@@ -927,9 +955,32 @@ document.querySelectorAll('[data-close]').forEach(btn=>{
   btn.addEventListener('click', ()=> closeOverlay(btn.dataset.close));
 });
 
+document.getElementById('inputGaiolaSelecionada').addEventListener('change', (e)=>{
+  const campoManual = document.getElementById('campoPlacaManual');
+  if(e.target.value === '__outra__'){
+    campoManual.style.display = '';
+    document.getElementById('inputPlaca').value = '';
+    document.getElementById('inputPlaca').focus();
+  } else {
+    campoManual.style.display = 'none';
+    const opt = e.target.selectedOptions[0];
+    document.getElementById('inputMotorista').value = opt ? (opt.dataset.transp || '') : '';
+  }
+});
+
 document.getElementById('btnConfirmarEntrada').addEventListener('click', async ()=>{
-  const placa = document.getElementById('inputPlaca').value.trim().toUpperCase();
-  if(!placa){ document.getElementById('inputPlaca').focus(); return; }
+  const campoSelect = document.getElementById('campoGaiolaSelect');
+  const selectEl = document.getElementById('inputGaiolaSelecionada');
+  const usandoSelect = campoSelect.style.display !== 'none' && selectEl.value !== '__outra__';
+
+  const placa = usandoSelect
+    ? selectEl.value.trim().toUpperCase()
+    : document.getElementById('inputPlaca').value.trim().toUpperCase();
+
+  if(!placa){
+    if(!usandoSelect) document.getElementById('inputPlaca').focus();
+    return;
+  }
   const motorista = document.getElementById('inputMotorista').value.trim();
 
   const remoto = await buscarEstadoRemoto();
