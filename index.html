@@ -92,7 +92,7 @@
   .overlay{ position:fixed; inset:0; background:rgba(4,7,14,.72); display:none; align-items:center; justify-content:center; z-index:50; padding:16px; }
   .overlay.show{ display:flex; }
   .modal{ background: var(--panel); border:1px solid var(--panel-line); border-radius:10px; width:100%; max-width:380px; padding:22px; position:relative; }
-  .modal-wide{ max-width:760px; }
+  .modal-wide{ max-width:960px; }
   .ajustes-grid{ display:grid; grid-template-columns:1fr 1fr; gap:0 24px; }
   .ajustes-grid .campo-full{ grid-column:1 / -1; }
   @media (max-width:640px){ .ajustes-grid{ grid-template-columns:1fr; } }
@@ -520,6 +520,7 @@
       <div style="display:flex; gap:10px; flex-wrap:wrap;">
         <button type="button" class="btn-ghost" id="btnLimparHistoricoHoje">Limpar histórico de hoje</button>
         <button type="button" class="btn-ghost" id="btnZerarOcupacoes">Zerar vagas/docas (voltar p/ livre)</button>
+        <button type="button" class="btn-ghost" id="btnLimparVagasDocasDia">Limpar vagas/docas (zerar até nova planilha)</button>
       </div>
     </div>
 
@@ -1188,6 +1189,24 @@ document.getElementById('btnZerarOcupacoes').addEventListener('click', async ()=
   render();
   await persist();
   mostrarAviso('Vagas e docas liberadas', 'Todas as posições foram marcadas como livres.');
+});
+
+document.getElementById('btnLimparVagasDocasDia').addEventListener('click', async ()=>{
+  if(!confirm('Tem certeza que deseja apagar TODAS as vagas e docas (numeração e agenda do dia)? O painel fica vazio até a próxima planilha ser importada. Essa ação não pode ser desfeita.')) return;
+  state.vagas = [];
+  state.docas = [];
+  state.config.totalVagas = 0;
+  state.config.totalDocas = 0;
+  if(!state.agenda) state.agenda = { vagas:{}, docas:{} };
+  state.agenda.vagas = {};
+  state.agenda.docas = {};
+  document.getElementById('gridVagas').innerHTML = '';
+  document.getElementById('gridDocas').innerHTML = '';
+  document.getElementById('cfgTotalVagas').value = 0;
+  document.getElementById('cfgTotalDocas').value = 0;
+  render();
+  await persist();
+  mostrarAviso('Vagas e docas limpas', 'A numeração e a agenda foram zeradas. Importe a planilha do dia pra recomeçar.');
 });
 
 document.getElementById('linkAbrirCadastro').addEventListener('click', (e)=>{
